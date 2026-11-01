@@ -90,7 +90,7 @@ const GRIP = { tray: SLICK, store: BEARINGS };
 const PLAY_GRIP = { friction: 0.02, frictionStatic: 0.05 };
 
 // Height at which the storage box is considered full: one ball above the rim,
-// so a small pile stands proud before anything leaves. A ball can roll off a
+// so a small pile stands above it before anything leaves. A ball can roll off a
 // side wall from roughly here too, so the two routes out compete rather than
 // running in sequence.
 const SPILL_LINE = STORE_RIM - BALL_R * 2;
@@ -289,7 +289,7 @@ function dispenseTray() {
   return false;
 }
 
-// A ball left sitting proud of the storage rim topples off the front of the
+// A ball left resting above the storage full line topples off the front of the
 // box. There is no third axis to fall along, so it becomes a collisionless
 // ghost that drops down the face of the machine.
 function spillForward(body) {
