@@ -1,6 +1,6 @@
 /* Pachinko: square cabinet, circular field, lever launcher. */
 
-const { Engine, Render, Runner, Bodies, Body, Composite, Events } = Matter;
+const { Engine, Render, Runner, Bodies, Body, Composite, Events, Sleeping } = Matter;
 
 /* ---- cabinet ----------------------------------------------------------- */
 
@@ -228,6 +228,12 @@ function isBall(body) {
   return !body.isStatic;
 }
 
+// Matter wakes a sleeping body on collision, but removing one is silent: the
+// pile above it keeps sleeping on support that is no longer there.
+function wake(bodies) {
+  for (const b of bodies) Sleeping.set(b, false);
+}
+
 function occupied(x, y, reach = PITCH * 0.95) {
   for (const body of Composite.allBodies(engine.world)) {
     if (!isBall(body)) continue;
@@ -301,6 +307,7 @@ function routeStock() {
   const pile = ballsLabelled('store');
   const lowest = pile.reduce((a, b) => (b.position.y > a.position.y ? b : a));
   Composite.remove(engine.world, lowest);
+  wake(pile);
   feed.tray += 1;
 }
 
@@ -308,6 +315,7 @@ function routeStock() {
 // dropping down the face of the machine.
 function spillForward(body) {
   Composite.remove(engine.world, body);
+  wake(ballsLabelled('store'));
   const ghost = ball(body.position.x, body.position.y, 'spill');
   ghost.collisionFilter.mask = 0;
   Composite.add(engine.world, ghost);
