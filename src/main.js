@@ -2,19 +2,23 @@
 
 const { Engine, Render, Runner, Bodies, Body, Composite, Events } = Matter;
 
-// The canvas is larger than the cabinet. The strip to the right and below is
+// The cabinet sits inside the canvas with a margin all round. That margin is
 // outside the machine, where overflow falls until a catcher exists.
-const WIDTH = 700;
-const HEIGHT = 900;
+const MARGIN = 50;
 const CAB_W = 600;
 const CAB_H = 800;
+const WIDTH = CAB_W + MARGIN * 2;
+const HEIGHT = CAB_H + MARGIN * 2;
+const OX = MARGIN;
+const OY = MARGIN;
+
 const BOX = 600;                             // the square glass box on top
 const WALL = 20;
 const BALL_R = 8.4;
 
 // Circular playfield inscribed in the square box.
-const CX = BOX / 2;
-const CY = BOX / 2;
+const CX = OX + BOX / 2;
+const CY = OY + BOX / 2;
 const R = BOX / 2 - WALL;                    // inner face of the circular wall
 
 // The launch channel runs up the inside of the left wall, roughly 7 through to
@@ -40,16 +44,16 @@ const MAX_POWER = 19;
 // The deck, cut horizontally. Storage on top, firing tray below it. The two are
 // not connected: nothing moves between them on its own.
 const PLATE = 8;                             // thickness of a box wall or floor
-const STORE = { x: 28, y: 612, w: 384, h: 110 };   // interior
-const STORE_CAP = 147;
-const TRAY = { x: 216, y: 724, w: 190, h: 56 };    // interior
+const STORE = { x: OX + 28, y: OY + 612, w: 384, h: 110 };   // interior
+const STORE_WALLS = 0.8;                     // side walls run short, so the pile spills
+const TRAY = { x: OX + 216, y: OY + 724, w: 190, h: 56 };    // interior
 const TRAY_CAP = 25;
 const TRAY_DROP = 14;                        // how far the tray floor falls to the right
 const PAYOUT = 50;                           // stand-in for a jackpot, until there is one
 
 // Lever: pivots on its left end, swings down, fires on release.
-const LEVER_X = 444;
-const LEVER_Y = 706;
+const LEVER_X = OX + 444;
+const LEVER_Y = OY + 706;
 const LEVER_LEN = 108;
 const LEVER_MAX = 40;                        // degrees of travel
 const PULL_PX = 160;                         // drag distance for a full pull
@@ -64,9 +68,13 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const state = { drained: 0 };
 const lever = { pull: 0, dragging: false, fromY: 0, fromPull: 0 };
 
+// Balls are dispensed one per step from a chute above each box, the way a real
+// machine pays out. Piling them up is what makes the overflow happen by itself.
+const feed = { tray: 0, store: 0 };
+
 const engine = Engine.create();
 engine.gravity.y = 1;
-engine.enableSleeping = true;                // a settled pile costs nothing
+engine.enableSleeping = true;                // a settled storage pile costs nothing
 
 const canvas = document.getElementById('field');
 const render = Render.create({
@@ -112,19 +120,17 @@ function railCap() {
   return slab(p.x, p.y, RAIL_GAP + RAIL_T, RAIL_T, -rad(RAIL_FROM));
 }
 
-// Open-topped container: floor plus two side walls, nothing across the top, so
-// anything past capacity climbs out on its own.
-function bin(box, drop = 0) {
-  const left = box.x - PLATE / 2;
-  const right = box.x + box.w + PLATE / 2;
-  const floorY = box.y + box.h + PLATE / 2;
-  const span = box.w + PLATE * 2;
+// Open-topped container: floor plus two side walls. `wallScale` under 1 leaves
+// the sides shorter than the box is deep, so a full pile rolls off them.
+function bin(box, drop = 0, wallScale = 1) {
+  const floorTop = box.y + box.h;
+  const wallH = (box.h + PLATE) * wallScale;
   const tilt = Math.atan2(drop, box.w);
 
   return [
-    slab(box.x + box.w / 2, floorY + drop / 2, span, PLATE, tilt),
-    slab(left, box.y + box.h / 2 + drop / 2, PLATE, box.h + drop + PLATE),
-    slab(right, box.y + box.h / 2 + drop / 2, PLATE, box.h + drop + PLATE)
+    slab(box.x + box.w / 2, floorTop + PLATE / 2 + drop / 2, box.w + PLATE * 2, PLATE, tilt),
+    slab(box.x - PLATE / 2, floorTop - wallH / 2, PLATE, wallH),
+    slab(box.x + box.w + PLATE / 2, floorTop + drop - wallH / 2, PLATE, wallH)
   ];
 }
 
@@ -132,7 +138,7 @@ Composite.add(engine.world, [
   ...arc(R + WALL / 2, 0, 360, 96, WALL),
   ...arc(R - RAIL_GAP - RAIL_T / 2, RAIL_FROM, RAIL_TO, 48, RAIL_T),
   railCap(),
-  ...bin(STORE),
+  ...bin(STORE, 0, STORE_WALLS),
   ...bin(TRAY, TRAY_DROP)
 ]);
 
@@ -143,38 +149,24 @@ function ball(x, y, label) {
     friction: 0.02,
     frictionAir: 0.001,
     density: 0.004,
+    // Tray balls have to keep sliding down to the lever as it empties, so they
+    // are never allowed to fall asleep.
+    sleepThreshold: label === 'tray' ? Infinity : 60,
     render: { fillStyle: '#e8eef5' }
   });
 }
 
-function count(label) {
-  return Composite.allBodies(engine.world).filter((b) => b.label === label).length;
+// Where a dispensed ball enters its box: above the rim, jittered so the pile
+// does not stack into a single column.
+function chute(label) {
+  const box = label === 'tray' ? TRAY : STORE;
+  const x = label === 'tray' ? box.x + 24 : box.x + box.w / 2;
+  return { x: x + (Math.random() - 0.5) * 12, y: box.y - 16 };
 }
 
-// Hex-packed slot, filling from the floor up, so a payout lands settled instead
-// of exploding. Past capacity the slot sits above the rim and spills.
-function slotIn(box, i, cap) {
-  const d = BALL_R * 2 + 1;
-  const cols = Math.floor(box.w / d);
-
-  if (i >= cap) {
-    return { x: box.x + box.w / 2, y: box.y - 30 - (i - cap) * d };
-  }
-
-  const row = Math.floor(i / cols);
-  const col = i % cols;
-  return {
-    x: box.x + BALL_R + col * d + (row % 2) * (d / 2),
-    y: box.y + box.h - BALL_R - row * d * 0.866
-  };
-}
-
-function fill(box, label, cap, n) {
-  const start = count(label);
-  for (let i = 0; i < n; i++) {
-    const p = slotIn(box, start + i, cap);
-    Composite.add(engine.world, ball(p.x, p.y, label));
-  }
+function dispense(label) {
+  const p = chute(label);
+  Composite.add(engine.world, ball(p.x, p.y, label));
 }
 
 function launch(power) {
@@ -209,7 +201,22 @@ function inReturn(p) {
   return deg > RETURN_LO && deg < RETURN_HI;
 }
 
+const counts = { tray: 0, store: 0, play: 0 };
+
 Events.on(engine, 'afterUpdate', () => {
+  if (feed.tray > 0) {
+    feed.tray -= 1;
+    dispense('tray');
+  }
+  if (feed.store > 0) {
+    feed.store -= 1;
+    dispense('store');
+  }
+
+  counts.tray = 0;
+  counts.store = 0;
+  counts.play = 0;
+
   for (const body of Composite.allBodies(engine.world)) {
     if (body.isStatic) continue;
 
@@ -219,15 +226,20 @@ Events.on(engine, 'afterUpdate', () => {
       continue;
     }
 
-    if (body.label !== 'play') continue;
-
-    if (inDrain(body.position)) {
-      Composite.remove(engine.world, body);
-      state.drained += 1;
-    } else if (inReturn(body.position)) {
-      Composite.remove(engine.world, body);
-      fill(TRAY, 'tray', TRAY_CAP, 1);
+    if (body.label === 'play') {
+      if (inDrain(body.position)) {
+        Composite.remove(engine.world, body);
+        state.drained += 1;
+        continue;
+      }
+      if (inReturn(body.position)) {
+        Composite.remove(engine.world, body);
+        feed.tray += 1;
+        continue;
+      }
     }
+
+    counts[body.label] += 1;
   }
   draw();
 });
@@ -238,8 +250,8 @@ Events.on(render, 'afterRender', () => {
   ctx.save();
   ctx.strokeStyle = '#2d3a4b';
   ctx.lineWidth = 2;
-  ctx.strokeRect(1, 1, CAB_W - 2, CAB_H - 2);
-  ctx.strokeRect(1, 1, BOX - 2, BOX - 2);
+  ctx.strokeRect(OX, OY, CAB_W, CAB_H);
+  ctx.strokeRect(OX, OY, BOX, BOX);
 
   // The losing hole, drawn exactly where the hitbox is.
   ctx.fillStyle = '#e0574a';
@@ -271,9 +283,9 @@ const out = {
 };
 
 function draw() {
-  out.tray.textContent = count('tray');
-  out.store.textContent = count('store');
-  out.live.textContent = count('play');
+  out.tray.textContent = counts.tray;
+  out.store.textContent = counts.store;
+  out.live.textContent = counts.play;
   out.drained.textContent = state.drained;
 }
 
@@ -320,17 +332,15 @@ canvas.addEventListener('pointerup', release);
 canvas.addEventListener('pointercancel', release);
 
 addButton.addEventListener('click', () => {
-  fill(TRAY, 'tray', TRAY_CAP, Math.max(0, TRAY_CAP - count('tray')));
-  draw();
+  feed.tray = Math.max(feed.tray, TRAY_CAP - counts.tray);
 });
 
 payoutButton.addEventListener('click', () => {
-  fill(STORE, 'store', STORE_CAP, PAYOUT);
-  draw();
+  feed.store += PAYOUT;
 });
 
 Render.run(render);
 Runner.run(Runner.create(), engine);
 draw();
 
-window.__debug = { engine, Composite, state, lever };
+window.__debug = { engine, Composite, state, lever, feed, counts };
