@@ -48,7 +48,7 @@ const MAX_POWER = 19;
 // The deck, cut horizontally. Storage on top, firing tray below it. The two are
 // not connected: nothing moves between them on its own.
 const PLATE = 8;                             // thickness of a box wall or floor
-const STORE = { x: OX + 28, y: OY + 652, w: 384, h: 110 };   // interior
+const STORE = { x: OX + 28, y: OY + 637, w: 384, h: 110 };   // interior
 const STORE_WALLS = 0.64;                    // side walls run short, so the pile spills
 const STORE_WALL_ADD = 10;
 const STORE_RIM = STORE.y + STORE.h - (STORE.h * STORE_WALLS + STORE_WALL_ADD);
@@ -56,6 +56,13 @@ const STORE_FLOOR = PLATE + 20;              // thick, so a fast payout cannot t
 const TRAY = { x: OX + 216, y: OY + 797, w: 190, h: 30 };    // interior, shallow end
 const TRAY_CAP = 25;
 const TRAY_DROP = 30;                        // how far the tray floor falls to the right
+
+// The gap between the storage floor and the tray, just wide enough to drop a
+// ball through. Refills land here, at the shallow end, and roll to the lever.
+const TRAY_CHUTE = {
+  x: TRAY.x + 26,
+  y: (STORE.y + STORE.h + STORE_FLOOR + TRAY.y) / 2
+};
 const PAYOUT = 50;                           // stand-in for a jackpot, until there is one
 
 // Deck and field are separate collision worlds. Payout balls are dropped from
@@ -280,6 +287,13 @@ function traySlot(i) {
 }
 
 function dispenseTray() {
+  // Normally a ball drops in through the gap above the shallow end.
+  if (!occupied(TRAY_CHUTE.x, TRAY_CHUTE.y, PITCH * 0.9)) {
+    Composite.add(engine.world, ball(TRAY_CHUTE.x, TRAY_CHUTE.y, 'tray'));
+    return true;
+  }
+
+  // If the gap is blocked, place into the pack instead so a fill cannot stall.
   for (let i = counts.tray; i < counts.tray + 12; i++) {
     const p = traySlot(i);
     if (occupied(p.x, p.y, PITCH * 0.9)) continue;
@@ -287,6 +301,29 @@ function dispenseTray() {
     return true;
   }
   return false;
+}
+
+// Balls in the tray plus balls already on their way to it.
+function trayRoom() {
+  return TRAY_CAP - counts.tray - feed.tray;
+}
+
+// A payout fills the tray before it fills storage, and once storage holds
+// anything it keeps topping the tray up as the lever drains it. Balls are
+// taken off the bottom of the pile so the heap visibly sinks.
+function routeStock() {
+  if (feed.store > 0 && trayRoom() > 0) {
+    feed.store -= 1;
+    feed.tray += 1;
+    return;
+  }
+
+  if (feed.tray > 0 || trayRoom() <= 0 || counts.store === 0) return;
+
+  const pile = ballsLabelled('store');
+  const lowest = pile.reduce((a, b) => (b.position.y > a.position.y ? b : a));
+  Composite.remove(engine.world, lowest);
+  feed.tray += 1;
 }
 
 // A ball left resting above the storage full line topples off the front of the
@@ -332,6 +369,7 @@ function inReturn(p) {
 }
 
 Events.on(engine, 'afterUpdate', () => {
+  routeStock();
   if (feed.store > 0 && dispenseStore()) feed.store -= 1;
   if (feed.tray > 0 && dispenseTray()) feed.tray -= 1;
 
