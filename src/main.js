@@ -89,11 +89,12 @@ const BEARINGS = { friction: 0.001, frictionStatic: 0, filter: DECK_FILTER };
 const GRIP = { tray: SLICK, store: BEARINGS };
 const PLAY_GRIP = { friction: 0.02, frictionStatic: 0.05 };
 
-// Front spill opens at the rim, which is the exact height at which a ball can
-// also roll off a side wall. Any higher and the pile has to clear the rim
-// first, which means side overflow always starts before front spill can.
-const SPILL_LINE = STORE_RIM;
-const PROUD_STEPS = 25;                      // time a ball gets to roll off a side first
+// Height at which the storage box is considered full: one ball above the rim,
+// so a small pile stands proud before anything leaves. A ball can roll off a
+// side wall from roughly here too, so the two routes out compete rather than
+// running in sequence.
+const SPILL_LINE = STORE_RIM - BALL_R * 2;
+const SPILL_DELAY = 25;                      // steps above the line before it falls out front
 
 // Lever: pivots on its left end, swings down, fires on release.
 const LEVER_X = OX + 444;
@@ -364,18 +365,18 @@ Events.on(engine, 'afterUpdate', () => {
       }
     }
 
-    // A ball stranded above the rim gets a moment to roll off a side wall. Only
-    // if it is still sitting there does it topple off the front.
+    // A ball resting above the full line gets a moment to roll off a side wall.
+    // Only if it is still sitting there does it topple off the front.
     if (body.label === 'store') {
-      const proud = body.position.y > DECK_TOP && body.position.y < SPILL_LINE;
-      if (proud && body.speed < 0.5) {
-        body.proud = (body.proud || 0) + 1;
-        if (body.proud > PROUD_STEPS) {
+      const aboveLine = body.position.y > DECK_TOP && body.position.y < SPILL_LINE;
+      if (aboveLine && body.speed < 0.5) {
+        body.restingAboveLine = (body.restingAboveLine || 0) + 1;
+        if (body.restingAboveLine > SPILL_DELAY) {
           spillForward(body);
           continue;
         }
       } else {
-        body.proud = 0;
+        body.restingAboveLine = 0;
       }
     }
 
