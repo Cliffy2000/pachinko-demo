@@ -4,19 +4,15 @@ const { Engine, Render, Runner, Bodies, Body, Composite, Events, Sleeping } = Ma
 
 /* ---- cabinet ----------------------------------------------------------- */
 
-const MARGIN = 20;                           // canvas border, outside the machine
-const PAD = 25;                              // cabinet border around its contents
-const BOX = 600;                             // square glass box, top of the cabinet
-const CONTENT_H = 865;                       // box top to tray floor bottom
+// The one gap, from the canvas edge to the machine on every side.
+const MARGIN = 20;
+const BOX = 600;                             // glass window, width
+const CONTENT_H = 865;                       // window top to tray floor bottom
 
-const CAB_W = BOX + PAD * 2;
-const CAB_H = CONTENT_H + PAD * 2;
-const WIDTH = CAB_W + MARGIN * 2;
-const HEIGHT = CAB_H + MARGIN * 2;
-const CAB_X = MARGIN;
-const CAB_Y = MARGIN;
-const OX = CAB_X + PAD;                      // content origin: top left of the glass box
-const OY = CAB_Y + PAD;
+const WIDTH = BOX + MARGIN * 2;
+const HEIGHT = CONTENT_H + MARGIN * 2;
+const OX = MARGIN;                           // top left of the glass window
+const OY = MARGIN;
 const BOX_LIFT = 40;                         // the window bottom, raised to meet the curve
 const BOX_H = BOX - BOX_LIFT;
 const DECK_TOP = OY + BOX_H;                 // glass above, deck below
