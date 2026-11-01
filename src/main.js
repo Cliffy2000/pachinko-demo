@@ -39,7 +39,7 @@ const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // semi-axis gain per turn
 const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
 const RAIL_LIFT = 60;                        // deg, 12 o'clock to 10 o'clock
 const RAIL_SWEEP = 480;                      // deg total, outer end at 6 o'clock
-const RAIL_STEP = 3;                         // deg per segment
+const RAIL_STEP = 1;                         // deg per segment
 const RAIL_FLARE = 1.4;                      // px of semi-axis per deg, past 7 o'clock
 
 // Base ellipse. The three numbers to tune: width, height, and how far its
@@ -127,7 +127,7 @@ const BEARINGS = { friction: 0.001, frictionStatic: 0, filter: DECK_FILTER };
 const PLAY_GRIP = { friction: 0.02, frictionStatic: 0 };
 // Matter takes the HIGHER frictionStatic of a pair, and a slab defaults to 0.5,
 // so the rail grabs the ball unless the rail itself is slackened.
-const RAIL_GRIP = { friction: 0.005, frictionStatic: 0 };
+const RAIL_GRIP = { friction: 0.005, frictionStatic: 0, slop: 0.01 };
 const GRIP = { tray: SLICK, store: BEARINGS };
 
 // 9 degrees is inside the solver's resting tolerance, so tray balls are pushed
@@ -199,6 +199,7 @@ function slab(x, y, w, h, angle = 0, grip = {}) {
     angle,
     friction: grip.friction ?? 0.02,
     frictionStatic: grip.frictionStatic ?? 0.5,
+    slop: grip.slop ?? 0.05,
     restitution: 0.1,
     collisionFilter: grip.filter ?? FIELD_FILTER,
     render: { fillStyle: '#2d3a4b' }
@@ -234,7 +235,7 @@ function railWall() {
     if (!inGap && insideBox(mid)) {
       const dx = p.x - prev.x;
       const dy = p.y - prev.y;
-      pieces.push(slab(mid.x, mid.y, Math.hypot(dx, dy) + RAIL_T, RAIL_T, Math.atan2(dy, dx), RAIL_GRIP));
+      pieces.push(slab(mid.x, mid.y, Math.hypot(dx, dy) + 2, RAIL_T, Math.atan2(dy, dx), RAIL_GRIP));
     }
     prev = p;
   }
@@ -287,7 +288,11 @@ function ball(x, y, label) {
   return Bodies.polygon(x, y, label === 'play' ? 24 : 10, BALL_R, {
     label,
     circleRadius: BALL_R,
-    restitution: 0.45,
+    // Matter takes the HIGHER restitution of a pair, so the rail cannot damp a
+    // bouncy ball: this number alone decides how the rail ride feels. A ball
+    // held against a curve is in contact every step, and at 0.45 each of those
+    // contacts kicked it back off.
+    restitution: label === 'play' ? 0.2 : 0.45,
     friction: grip.friction,
     frictionStatic: grip.frictionStatic,
     frictionAir: label === 'tray' ? 0.0002 : label === 'play' ? 0.0003 : 0.001,
