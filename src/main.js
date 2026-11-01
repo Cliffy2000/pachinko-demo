@@ -15,6 +15,8 @@ const OY = MARGIN;
 const BOX = 600;                             // the square glass box on top
 const WALL = 20;
 const BALL_R = 8.4;
+const PITCH = BALL_R * 2 + 1;                // centre spacing of packed balls
+const ROW = PITCH * 0.866;                   // row spacing of a hex pack
 
 // Circular playfield inscribed in the square box.
 const CX = OX + BOX / 2;
@@ -45,10 +47,11 @@ const MAX_POWER = 19;
 // not connected: nothing moves between them on its own.
 const PLATE = 8;                             // thickness of a box wall or floor
 const STORE = { x: OX + 28, y: OY + 612, w: 384, h: 110 };   // interior
-const STORE_WALLS = 0.8;                     // side walls run short, so the pile spills
-const TRAY = { x: OX + 216, y: OY + 724, w: 190, h: 56 };    // interior
+const STORE_WALLS = 0.64;                    // side walls run short, so the pile spills
+const STORE_RIM = STORE.y + STORE.h - STORE.h * STORE_WALLS;
+const TRAY = { x: OX + 216, y: OY + 732, w: 190, h: 30 };    // interior, shallow end
 const TRAY_CAP = 25;
-const TRAY_DROP = 14;                        // how far the tray floor falls to the right
+const TRAY_DROP = 30;                        // how far the tray floor falls to the right
 const PAYOUT = 50;                           // stand-in for a jackpot, until there is one
 
 // Lever: pivots on its left end, swings down, fires on release.
@@ -67,9 +70,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 const state = { drained: 0 };
 const lever = { pull: 0, dragging: false, fromY: 0, fromPull: 0 };
-
-// Balls are dispensed one per step from a chute above each box, the way a real
-// machine pays out. Piling them up is what makes the overflow happen by itself.
+const counts = { tray: 0, store: 0, play: 0 };
 const feed = { tray: 0, store: 0 };
 
 const engine = Engine.create();
@@ -120,17 +121,25 @@ function railCap() {
   return slab(p.x, p.y, RAIL_GAP + RAIL_T, RAIL_T, -rad(RAIL_FROM));
 }
 
-// Open-topped container: floor plus two side walls. `wallScale` under 1 leaves
-// the sides shorter than the box is deep, so a full pile rolls off them.
+// Open-topped container: a floor plus two side walls, each wall running from
+// its own end of the floor up to the declared top. `wallScale` under 1 leaves
+// the sides short, so a pile that reaches them rolls off.
 function bin(box, drop = 0, wallScale = 1) {
-  const floorTop = box.y + box.h;
-  const wallH = (box.h + PLATE) * wallScale;
-  const tilt = Math.atan2(drop, box.w);
+  const leftFloor = box.y + box.h;
+  const rightFloor = leftFloor + drop;
+  const lh = (leftFloor - box.y) * wallScale;
+  const rh = (rightFloor - box.y) * wallScale;
 
   return [
-    slab(box.x + box.w / 2, floorTop + PLATE / 2 + drop / 2, box.w + PLATE * 2, PLATE, tilt),
-    slab(box.x - PLATE / 2, floorTop - wallH / 2, PLATE, wallH),
-    slab(box.x + box.w + PLATE / 2, floorTop + drop - wallH / 2, PLATE, wallH)
+    slab(
+      box.x + box.w / 2,
+      (leftFloor + rightFloor) / 2 + PLATE / 2,
+      box.w + PLATE * 2,
+      PLATE,
+      Math.atan2(drop, box.w)
+    ),
+    slab(box.x - PLATE / 2, leftFloor - lh / 2, PLATE, lh),
+    slab(box.x + box.w + PLATE / 2, rightFloor - rh / 2, PLATE, rh)
   ];
 }
 
@@ -156,17 +165,61 @@ function ball(x, y, label) {
   });
 }
 
-// Where a dispensed ball enters its box: above the rim, jittered so the pile
-// does not stack into a single column.
-function chute(label) {
-  const box = label === 'tray' ? TRAY : STORE;
-  const x = label === 'tray' ? box.x + 24 : box.x + box.w / 2;
-  return { x: x + (Math.random() - 0.5) * 12, y: box.y - 16 };
+function isBall(body) {
+  return !body.isStatic;
 }
 
-function dispense(label) {
-  const p = chute(label);
-  Composite.add(engine.world, ball(p.x, p.y, label));
+function occupied(x, y, reach = PITCH * 0.95) {
+  for (const body of Composite.allBodies(engine.world)) {
+    if (!isBall(body)) continue;
+    if (Math.hypot(body.position.x - x, body.position.y - y) < reach) return true;
+  }
+  return false;
+}
+
+// Storage is fed from a chute above the rim. A ball only leaves the chute once
+// the last one is clear of it, which is what keeps new balls landing on top of
+// the pile instead of inside it.
+function dispenseStore() {
+  const x = STORE.x + STORE.w / 2 + (Math.random() - 0.5) * 40;
+  const y = STORE_RIM - BALL_R - 10;
+  if (occupied(x, y)) return false;
+
+  const b = ball(x, y, 'store');
+  Composite.add(engine.world, b);
+  Body.setVelocity(b, { x: 0, y: 4 });
+  return true;
+}
+
+// The tray sits directly under the storage floor, so there is no room to drop
+// balls in from above. They are placed into the pack instead, deep end first,
+// which is also the end the lever draws from.
+function traySlot(i) {
+  const cols = Math.floor(TRAY.w / PITCH);
+  const row = Math.floor(i / cols);
+  const x = TRAY.x + TRAY.w - BALL_R - (i % cols) * PITCH - (row % 2) * (PITCH / 2);
+  const floorY = TRAY.y + TRAY.h + ((x - TRAY.x) / TRAY.w) * TRAY_DROP;
+  return { x, y: floorY - BALL_R - 1 - row * ROW };
+}
+
+function dispenseTray() {
+  for (let i = counts.tray; i < counts.tray + 12; i++) {
+    const p = traySlot(i);
+    if (occupied(p.x, p.y, PITCH * 0.9)) continue;
+    Composite.add(engine.world, ball(p.x, p.y, 'tray'));
+    return true;
+  }
+  return false;
+}
+
+// A ball left sitting proud of the storage rim topples off the front of the
+// box. There is no third axis to fall along, so it becomes a collisionless
+// ghost that drops down the face of the machine.
+function spillForward(body) {
+  Composite.remove(engine.world, body);
+  const ghost = ball(body.position.x, body.position.y, 'spill');
+  ghost.collisionFilter.mask = 0;
+  Composite.add(engine.world, ghost);
 }
 
 function launch(power) {
@@ -201,24 +254,16 @@ function inReturn(p) {
   return deg > RETURN_LO && deg < RETURN_HI;
 }
 
-const counts = { tray: 0, store: 0, play: 0 };
-
 Events.on(engine, 'afterUpdate', () => {
-  if (feed.tray > 0) {
-    feed.tray -= 1;
-    dispense('tray');
-  }
-  if (feed.store > 0) {
-    feed.store -= 1;
-    dispense('store');
-  }
+  if (feed.store > 0 && dispenseStore()) feed.store -= 1;
+  if (feed.tray > 0 && dispenseTray()) feed.tray -= 1;
 
   counts.tray = 0;
   counts.store = 0;
   counts.play = 0;
 
   for (const body of Composite.allBodies(engine.world)) {
-    if (body.isStatic) continue;
+    if (!isBall(body)) continue;
 
     // Anything that leaves the canvas has spilled out of the machine.
     if (body.position.y > HEIGHT + 40) {
@@ -239,7 +284,12 @@ Events.on(engine, 'afterUpdate', () => {
       }
     }
 
-    counts[body.label] += 1;
+    if (body.label === 'store' && body.position.y < STORE_RIM && body.speed < 0.5) {
+      spillForward(body);
+      continue;
+    }
+
+    if (body.label in counts) counts[body.label] += 1;
   }
   draw();
 });
