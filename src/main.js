@@ -28,34 +28,47 @@ const ROW = PITCH * 0.866;                   // row spacing, hex pack
 const CX = OX + BOX / 2;
 const CY = OY + BOX / 2;
 
-// One continuous rail, traced from its inner end at 10 o'clock and swept
-// anticlockwise: circular for 300 degrees to 12 o'clock, lifting clear of
-// itself over the next 60, running parallel through the 90 degree launch
-// channel from 10 to 7, then flaring past the square on the way to 6.
 const RAIL_T = 20;                           // thick enough that a fast ball cannot tunnel
 const RAIL_CLEAR = 28;                       // channel width
-const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // radial gain per turn
-const R0 = BOX / 2 - RAIL_PITCH - RAIL_T / 2;   // outer winding sits flush with the box
+const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // normal offset between the two windings
+
+// The field boundary is an ellipse pushed right, sized so the rail sits flush
+// against all four edges of the window: the channel takes up the slack on the
+// left, the field itself reaches the edge on the right, top and bottom.
+const ELL_B = BOX / 2 - RAIL_T / 2;
+const ELL_A = (ELL_B + (BOX / 2 - RAIL_PITCH - RAIL_T / 2)) / 2;
+const ELL_DX = ELL_B - ELL_A;
+const ELL = { x: CX + ELL_DX, y: CY };
+
+// One rail, traced from its inner end at 10 o'clock and swept anticlockwise.
+// It runs on the ellipse for 300 degrees to 12 o'clock, then leaves it as a
+// single smooth curve: easing out to a full offset by 10 o'clock, holding that
+// through the channel to 7, then flaring out of the window towards 6.
 const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
-const RAIL_LIFT = 60;                        // deg, 12 o'clock to 10 o'clock
+const RAIL_ON_ELL = 300;                     // deg spent on the ellipse
+const RAIL_LIFT = 60;                        // deg, 12 o'clock out to 10 o'clock
+const RAIL_HOLD = 450;                       // deg, channel ends at 7 o'clock
 const RAIL_SWEEP = 480;                      // deg total, outer end at 6 o'clock
 const RAIL_STEP = 3;                         // deg per segment
-const RAIL_FLARE = 1.4;                      // px of radius per deg, past 7 o'clock
-const CHANNEL_R = R0 + RAIL_PITCH / 2;
+const RAIL_FLARE = 60;                       // px of extra offset by 6 o'clock
+const CHANNEL_OUT = RAIL_T / 2 + RAIL_CLEAR / 2;   // centre of the channel
 
 const LAUNCH_DEG = -120;                     // 7 o'clock, where a ball sits
 const CAP_DEG = -114;                        // dead end just below the seat
 const RETURN_LO = -118;                      // stalled shots land between these
 const RETURN_HI = -100;
 
-// Hole in the rail at the bottom. The only way to lose a ball in play.
-const DRAIN_DEG = -90;
-const DRAIN_SPAN = 17.4;                     // deg, about 73px of rail
-const DRAIN_T = ((DRAIN_DEG - RAIL_HEAD) % 360 + 360) % 360;
+// Hole in the rail at the bottom, flush with the bottom of the window. The
+// only way to lose a ball in play.
+const DRAIN_PHI = -90;
+const DRAIN_W = 74;                          // px of rail removed
+const DRAIN_SPAN = ((DRAIN_W / ELL_A) * 180) / Math.PI;
+const DRAIN_T = (((DRAIN_PHI - RAIL_HEAD) % 360) + 360) % 360;
+const DRAIN_K = 1 - (RAIL_T / 2 + BALL_R * 1.6) / ELL_B;   // ball near the rail, with slack
 
-// Floor is the climb from the seat to the exit: 363px, needing 14.2.
-const MIN_POWER = 14;                        // px/step, just short of the exit
-const MAX_POWER = 23;                        // px/step, capped by RAIL_T against tunneling
+// Floor is the climb from the seat to the exit: 428px, needing 15.4.
+const MIN_POWER = 15;                        // px/step, just short of the exit
+const MAX_POWER = 24;                        // px/step, capped by RAIL_T against tunneling
 
 /* ---- deck -------------------------------------------------------------- */
 
@@ -118,10 +131,43 @@ const CHUTE_LIFT = 210;                      // payout drop height above the rim
 const rad = (deg) => (deg * Math.PI) / 180;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-// Angles run anticlockwise from east; canvas y is inverted, so sin flips.
-const atAngle = (r, deg) => ({ x: CX + r * Math.cos(rad(deg)), y: CY - r * Math.sin(rad(deg)) });
-const angleOf = (p) => (Math.atan2(CY - p.y, p.x - CX) * 180) / Math.PI;
-const radiusOf = (p) => Math.hypot(p.x - CX, CY - p.y);
+// Everything on the boundary is located by the ellipse parameter, anticlockwise
+// from east, with canvas y inverted so sin flips. For a near-circular ellipse
+// the parameter and the true bearing differ by only a couple of degrees.
+function ellipseNormal(phiDeg) {
+  const phi = rad(phiDeg);
+  const nx = Math.cos(phi) / ELL_A;
+  const ny = -Math.sin(phi) / ELL_B;
+  const n = Math.hypot(nx, ny);
+  return { x: nx / n, y: ny / n };
+}
+
+function ellipseAt(phiDeg, out = 0) {
+  const phi = rad(phiDeg);
+  const n = ellipseNormal(phiDeg);
+  return {
+    x: ELL.x + ELL_A * Math.cos(phi) + n.x * out,
+    y: ELL.y - ELL_B * Math.sin(phi) + n.y * out
+  };
+}
+
+// Unit tangent in the direction a launched ball travels, which is decreasing
+// parameter: 7 o'clock round to 10.
+function ellipseTangent(phiDeg) {
+  const phi = rad(phiDeg);
+  const tx = ELL_A * Math.sin(phi);
+  const ty = ELL_B * Math.cos(phi);
+  const t = Math.hypot(tx, ty);
+  return { x: tx / t, y: ty / t };
+}
+
+// Where a point sits relative to the boundary: k is 1 on the ellipse, and deg
+// is its parameter.
+function ellipseK(p) {
+  const u = (p.x - ELL.x) / ELL_A;
+  const v = (ELL.y - p.y) / ELL_B;
+  return { k: Math.hypot(u, v), deg: (Math.atan2(v, u) * 180) / Math.PI };
+}
 
 const state = { drained: 0, spilled: 0 };
 const lever = { pull: 0, dragging: false, fromY: 0, fromPull: 0 };
@@ -162,16 +208,23 @@ function slab(x, y, w, h, angle = 0, grip = {}) {
   });
 }
 
-// Radius at `t` degrees along the sweep. Flat, then the lift, then parallel
-// through the channel, then the flare out of the box.
-function railR(t) {
-  if (t <= RAIL_SWEEP - 180) return R0;
-  if (t <= RAIL_SWEEP - 120) return R0 + (RAIL_PITCH * (t - (RAIL_SWEEP - 180))) / RAIL_LIFT;
-  if (t <= RAIL_SWEEP - 30) return R0 + RAIL_PITCH;
-  return R0 + RAIL_PITCH + (t - (RAIL_SWEEP - 30)) * RAIL_FLARE;
+// Offset from the ellipse at `t` degrees along the sweep. Smoothstep out and
+// smoothstep into the flare, so the slope is zero at every junction and the
+// whole thing reads as one curve.
+function railLift(t) {
+  if (t <= RAIL_ON_ELL) return 0;
+
+  if (t <= RAIL_ON_ELL + RAIL_LIFT) {
+    const u = (t - RAIL_ON_ELL) / RAIL_LIFT;
+    return RAIL_PITCH * u * u * (3 - 2 * u);
+  }
+  if (t <= RAIL_HOLD) return RAIL_PITCH;
+
+  const v = (t - RAIL_HOLD) / (RAIL_SWEEP - RAIL_HOLD);
+  return RAIL_PITCH + RAIL_FLARE * v * v;
 }
 
-const railPoint = (t) => atAngle(railR(t), RAIL_HEAD + t);
+const railPoint = (t) => ellipseAt(RAIL_HEAD + t, railLift(t));
 const insideBox = (p) => Math.abs(p.x - CX) <= BOX / 2 && Math.abs(p.y - CY) <= BOX / 2;
 
 // Chord slabs along the curve, skipping the drain hole and anything the square
@@ -198,9 +251,11 @@ function railWall() {
 }
 
 // Dead end below the seat: without it a stalled shot runs out of the mouth.
+// Laid along the normal, so it closes the channel rather than lining it.
 function railCap() {
-  const p = atAngle(CHANNEL_R + 6, CAP_DEG);
-  return slab(p.x, p.y, RAIL_PITCH + 30, RAIL_T * 0.6, -rad(CAP_DEG));
+  const p = ellipseAt(CAP_DEG, CHANNEL_OUT);
+  const n = ellipseNormal(CAP_DEG);
+  return slab(p.x, p.y, RAIL_PITCH + 30, RAIL_T * 0.6, Math.atan2(n.y, n.x));
 }
 
 // Open-topped container. Each wall runs from its own end of the floor up to
@@ -361,26 +416,25 @@ function launch(power) {
   const next = tray.reduce((a, b) => (b.position.x > a.position.x ? b : a));
   Composite.remove(engine.world, next);
 
-  const seat = atAngle(CHANNEL_R, LAUNCH_DEG);
+  const seat = ellipseAt(LAUNCH_DEG, CHANNEL_OUT);
+  const dir = ellipseTangent(LAUNCH_DEG);
   const shot = ball(seat.x, seat.y, 'play');
-  const t = rad(LAUNCH_DEG);
 
   Composite.add(engine.world, shot);
-  Body.setVelocity(shot, { x: Math.sin(t) * power, y: Math.cos(t) * power });  // tangent, clockwise
+  Body.setVelocity(shot, { x: dir.x * power, y: dir.y * power });
 }
 
 // Reached the rail where the hole is.
 function inDrain(p) {
-  if (radiusOf(p) < R0 - RAIL_T / 2 - BALL_R) return false;
-  return Math.abs(angleOf(p) - DRAIN_DEG) < DRAIN_SPAN / 2;
+  const { k, deg } = ellipseK(p);
+  return k > DRAIN_K && Math.abs(deg - DRAIN_PHI) < DRAIN_SPAN / 2;
 }
 
-// Back below the seat and into the capped pocket.
+// Back below the seat and into the capped pocket. Anything in play sits well
+// inside the ellipse, so requiring k above 1 keeps the field out of it.
 function inReturn(p) {
-  const r = radiusOf(p);
-  if (r < R0 || r > R0 + RAIL_PITCH + 20) return false;
-
-  const deg = angleOf(p);
+  const { k, deg } = ellipseK(p);
+  if (k < 1 || k > 1 + (RAIL_PITCH + 20) / ELL_A) return false;
   return deg > RETURN_LO && deg < RETURN_HI;
 }
 
@@ -410,7 +464,9 @@ Events.on(engine, 'afterUpdate', () => {
     }
 
     if (body.label === 'play') {
-      if (inDrain(body.position)) {
+      // Backstop: the hole is the only way out of the field, so anything below
+      // the window went through it, however fast it was moving.
+      if (y > DECK_TOP || inDrain(body.position)) {
         Composite.remove(engine.world, body);
         state.drained += 1;
         continue;
@@ -458,12 +514,19 @@ Events.on(render, 'afterRender', () => {
   ctx.save();
   ctx.strokeStyle = '#2d3a4b';
   ctx.lineWidth = 2;
-  ctx.strokeRect(CAB_X, CAB_Y, CAB_W, CAB_H);
   ctx.strokeRect(OX, OY, BOX, BOX);
 
   // The hole, marked across the gap left in the rail.
   ctx.beginPath();
-  ctx.arc(CX, CY, R0, rad(-DRAIN_DEG - DRAIN_SPAN / 2), rad(-DRAIN_DEG + DRAIN_SPAN / 2));
+  ctx.ellipse(
+    ELL.x,
+    ELL.y,
+    ELL_A,
+    ELL_B,
+    0,
+    rad(-DRAIN_PHI - DRAIN_SPAN / 2),
+    rad(-DRAIN_PHI + DRAIN_SPAN / 2)
+  );
   ctx.strokeStyle = '#e0574a';
   ctx.lineWidth = RAIL_T;
   ctx.stroke();
@@ -568,4 +631,4 @@ Render.run(render);
 Runner.run(Runner.create(), engine);
 draw();
 
-window.__debug = { engine, Composite, state, lever, feed, counts, railR, railPoint };
+window.__debug = { engine, Composite, state, lever, feed, counts, railLift, railPoint, ellipseK };
