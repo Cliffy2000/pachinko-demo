@@ -61,8 +61,16 @@ const PAYOUT = 50;                           // stand-in for a jackpot, until th
 // tray balls also get a constant push down-slope. Set TRAY_PUSH to 0 to see
 // what the geometry does on its own.
 const SLICK = { friction: 0, frictionStatic: 0 };
-const TRAY_PUSH = 0.0006;                    // added acceleration, towards the lever
-const PROUD_STEPS = 45;                      // time a ball gets to roll off a side first
+const TRAY_PUSH = 0.0003;                    // added acceleration, towards the lever
+
+// Storage balls are near frictionless too, for a different reason: a pile with
+// grip holds an angle of repose, so a ball landing on top has no slope to run
+// down and never reaches a side wall. A slick pile levels itself and spills off
+// the edges, which is what side overflow needs.
+const BEARINGS = { friction: 0.001, frictionStatic: 0 };
+const GRIP = { tray: SLICK, store: BEARINGS };
+const PLAY_GRIP = { friction: 0.02, frictionStatic: 0.05 };
+const PROUD_STEPS = 120;                     // time a ball gets to roll off a side first
 
 // Lever: pivots on its left end, swings down, fires on release.
 const LEVER_X = OX + 444;
@@ -159,16 +167,17 @@ Composite.add(engine.world, [
   ...arc(R + WALL / 2, 0, 360, 96, WALL),
   ...arc(R - RAIL_GAP - RAIL_T / 2, RAIL_FROM, RAIL_TO, 48, RAIL_T),
   railCap(),
-  ...bin(STORE, 0, STORE_WALLS),
+  ...bin(STORE, 0, STORE_WALLS, BEARINGS),
   ...bin(TRAY, TRAY_DROP, 1, SLICK)
 ]);
 
 function ball(x, y, label) {
+  const grip = GRIP[label] || PLAY_GRIP;
   return Bodies.circle(x, y, BALL_R, {
     label,
     restitution: 0.45,
-    friction: label === 'tray' ? SLICK.friction : 0.02,
-    frictionStatic: label === 'tray' ? SLICK.frictionStatic : 0.05,
+    friction: grip.friction,
+    frictionStatic: grip.frictionStatic,
     frictionAir: label === 'tray' ? 0.0002 : 0.001,
     slop: label === 'tray' ? 0.01 : 0.05,
     density: 0.004,
