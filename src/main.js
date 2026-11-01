@@ -33,7 +33,7 @@ const CY = OY + BOX / 2;
 //
 // The lift grows both semi-axes rather than the radius, so the two ends of the
 // sweep are themselves plain ellipses and the whole family is one expression.
-const RAIL_T = 20;                           // thick enough that a fast ball cannot tunnel
+const RAIL_T = 10;                           // see the catch-window note by MAX_POWER
 const RAIL_CLEAR = 28;                       // channel width
 const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // semi-axis gain per turn
 const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
@@ -45,8 +45,8 @@ const RAIL_FLARE = 1.4;                      // px of semi-axis per deg, past 7 
 // Base ellipse. The three numbers to tune: width, height, and how far its
 // centre sits above the window's own centre.
 const ELL_A = BOX / 2 - RAIL_PITCH - RAIL_T / 2;   // 242, outer winding flush left
-const ELL_B = 258.5;
-const ELL_RISE = 8.5;
+const ELL_B = 268.5;
+const ELL_RISE = 18.5;
 const ELL = { x: CX, y: CY - ELL_RISE };
 
 const CHANNEL_L = RAIL_T / 2 + RAIL_CLEAR / 2;     // lift at the middle of the channel
@@ -66,8 +66,13 @@ const DRAIN_T = ((DRAIN_DEG - RAIL_HEAD) % 360 + 360) % 360;
 // view instead of vanishing the instant it reaches the rail.
 const DRAIN_Y = DECK_TOP + BALL_R;
 
+// What stops a ball tunnelling is not the wall thickness but the catch window,
+// 2 * (RAIL_T / 2 + BALL_R) = 26.8px: a ball is caught as long as it travels
+// less than that in a step. The fastest perpendicular impact is about 18, so
+// there is 1.5x in hand. MAX_POWER itself is 25, but that is tangent to the
+// channel at launch, never into a wall.
 const MIN_POWER = 17;                        // px/step, just short of the top
-const MAX_POWER = 25;                        // px/step, capped by RAIL_T against tunneling
+const MAX_POWER = 25;                        // px/step
 
 /* ---- deck -------------------------------------------------------------- */
 
