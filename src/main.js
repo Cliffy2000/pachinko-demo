@@ -32,39 +32,44 @@ const RAIL_T = 20;                           // thick enough that a fast ball ca
 const RAIL_CLEAR = 28;                       // channel width
 const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // normal offset between the two windings
 
-// The field boundary is an ellipse pushed right, sized so the rail sits flush
-// against all four edges of the window: the channel takes up the slack on the
-// left, the field itself reaches the edge on the right, top and bottom.
-const ELL_B = BOX / 2 - RAIL_T / 2;
-const ELL_A = (ELL_B + (BOX / 2 - RAIL_PITCH - RAIL_T / 2)) / 2;
-const ELL_DX = ELL_B - ELL_A;
-const ELL = { x: CX + ELL_DX, y: CY };
-
 // One rail, traced from its inner end at 10 o'clock and swept anticlockwise.
-// It runs on the ellipse for 300 degrees to 12 o'clock, then leaves it as a
-// single smooth curve: easing out to a full offset by 10 o'clock, holding that
-// through the channel to 7, then flaring out of the window towards 6.
+// It sits on the ellipse for 300 degrees to 12 o'clock, then peels away under a
+// single saturating curve for the rest of the sweep. The curve and all its
+// derivatives are zero where it leaves the ellipse, so there is no junction to
+// see, and it levels off at RAIL_MAX rather than running away.
 const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
 const RAIL_ON_ELL = 300;                     // deg spent on the ellipse
-const RAIL_LIFT = 60;                        // deg, 12 o'clock out to 10 o'clock
-const RAIL_HOLD = 450;                       // deg, channel ends at 7 o'clock
-const RAIL_SWEEP = 480;                      // deg total, outer end at 6 o'clock
+const RAIL_RISE = 150;                       // deg, 12 o'clock to the mouth at 7
+const RAIL_EASE = 0.22;                      // how sharply it reaches full offset
+const RAIL_SWEEP = 480;                      // deg total, past the window at 6 o'clock
 const RAIL_STEP = 3;                         // deg per segment
-const RAIL_FLARE = 60;                       // px of extra offset by 6 o'clock
 const CHANNEL_OUT = RAIL_T / 2 + RAIL_CLEAR / 2;   // centre of the channel
+
+// Scaled so the offset is exactly one pitch at 10 o'clock, where the channel
+// opens. 60 of the 150 degrees of rise are spent getting there.
+const RAIL_MAX = RAIL_PITCH / (1 - Math.exp(-(((60 / RAIL_RISE) / RAIL_EASE) ** 2)));
+
+// Field boundary. Centred, so the hole at the bottom sits on the window's
+// vertical centre line. The rail runs flush to the window top, bottom and
+// left, and the field keeps clear of the right edge by the same offset.
+const ELL_B = BOX / 2 - RAIL_T / 2;
+const ELL_A = BOX / 2 - RAIL_T / 2 - RAIL_MAX;
+const ELL = { x: CX, y: CY };
 
 const LAUNCH_DEG = -120;                     // 7 o'clock, where a ball sits
 const CAP_DEG = -114;                        // dead end just below the seat
 const RETURN_LO = -118;                      // stalled shots land between these
 const RETURN_HI = -100;
 
-// Hole in the rail at the bottom, flush with the bottom of the window. The
-// only way to lose a ball in play.
+// Hole in the rail at the bottom, flush with the bottom of the window and
+// centred on it. The window is the viewable area and the hole is the only way
+// out of the field, so a ball is counted lost on a flat line just below the
+// window edge rather than by any test against the curve.
 const DRAIN_PHI = -90;
 const DRAIN_W = 74;                          // px of rail removed
 const DRAIN_SPAN = ((DRAIN_W / ELL_A) * 180) / Math.PI;
 const DRAIN_T = (((DRAIN_PHI - RAIL_HEAD) % 360) + 360) % 360;
-const DRAIN_K = 1 - (RAIL_T / 2 + BALL_R * 1.6) / ELL_B;   // ball near the rail, with slack
+const DRAIN_Y = DECK_TOP + BALL_R;
 
 // Floor is the climb from the seat to the exit: 428px, needing 15.4.
 const MIN_POWER = 15;                        // px/step, just short of the exit
@@ -208,20 +213,12 @@ function slab(x, y, w, h, angle = 0, grip = {}) {
   });
 }
 
-// Offset from the ellipse at `t` degrees along the sweep. Smoothstep out and
-// smoothstep into the flare, so the slope is zero at every junction and the
-// whole thing reads as one curve.
+// Offset from the ellipse at `t` degrees along the sweep: one saturating curve
+// for the whole of it, flat at the start and levelling off at RAIL_MAX.
 function railLift(t) {
   if (t <= RAIL_ON_ELL) return 0;
-
-  if (t <= RAIL_ON_ELL + RAIL_LIFT) {
-    const u = (t - RAIL_ON_ELL) / RAIL_LIFT;
-    return RAIL_PITCH * u * u * (3 - 2 * u);
-  }
-  if (t <= RAIL_HOLD) return RAIL_PITCH;
-
-  const v = (t - RAIL_HOLD) / (RAIL_SWEEP - RAIL_HOLD);
-  return RAIL_PITCH + RAIL_FLARE * v * v;
+  const u = (t - RAIL_ON_ELL) / RAIL_RISE;
+  return RAIL_MAX * (1 - Math.exp(-((u / RAIL_EASE) ** 2)));
 }
 
 const railPoint = (t) => ellipseAt(RAIL_HEAD + t, railLift(t));
@@ -424,12 +421,6 @@ function launch(power) {
   Body.setVelocity(shot, { x: dir.x * power, y: dir.y * power });
 }
 
-// Reached the rail where the hole is.
-function inDrain(p) {
-  const { k, deg } = ellipseK(p);
-  return k > DRAIN_K && Math.abs(deg - DRAIN_PHI) < DRAIN_SPAN / 2;
-}
-
 // Back below the seat and into the capped pocket. Anything in play sits well
 // inside the ellipse, so requiring k above 1 keeps the field out of it.
 function inReturn(p) {
@@ -464,9 +455,8 @@ Events.on(engine, 'afterUpdate', () => {
     }
 
     if (body.label === 'play') {
-      // Backstop: the hole is the only way out of the field, so anything below
-      // the window went through it, however fast it was moving.
-      if (y > DECK_TOP || inDrain(body.position)) {
+      // Past the bottom of the window, so it went through the hole.
+      if (y > DRAIN_Y) {
         Composite.remove(engine.world, body);
         state.drained += 1;
         continue;
