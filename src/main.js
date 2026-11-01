@@ -4,13 +4,15 @@ const { Engine, Render, Runner, Bodies, Body, Composite, Events } = Matter;
 
 // The cabinet sits inside the canvas with a margin all round. That margin is
 // outside the machine, where overflow falls until a catcher exists.
-const MARGIN = 50;
+const MARGIN_TOP = 10;
+const MARGIN_SIDE = 50;
+const MARGIN_BOTTOM = 25;
 const CAB_W = 600;
-const CAB_H = 800;
-const WIDTH = CAB_W + MARGIN * 2;
-const HEIGHT = CAB_H + MARGIN * 2;
-const OX = MARGIN;
-const OY = MARGIN;
+const CAB_H = 865;                           // reclaimed from the top and bottom margins
+const WIDTH = CAB_W + MARGIN_SIDE * 2;
+const HEIGHT = MARGIN_TOP + CAB_H + MARGIN_BOTTOM;
+const OX = MARGIN_SIDE;
+const OY = MARGIN_TOP;
 
 const BOX = 600;                             // the square glass box on top
 const WALL = 20;
@@ -46,10 +48,11 @@ const MAX_POWER = 19;
 // The deck, cut horizontally. Storage on top, firing tray below it. The two are
 // not connected: nothing moves between them on its own.
 const PLATE = 8;                             // thickness of a box wall or floor
-const STORE = { x: OX + 28, y: OY + 612, w: 384, h: 110 };   // interior
+const STORE = { x: OX + 28, y: OY + 652, w: 384, h: 110 };   // interior
 const STORE_WALLS = 0.64;                    // side walls run short, so the pile spills
 const STORE_RIM = STORE.y + STORE.h - STORE.h * STORE_WALLS;
-const TRAY = { x: OX + 216, y: OY + 732, w: 190, h: 30 };    // interior, shallow end
+const STORE_FLOOR = PLATE + 20;              // thick, so a fast payout cannot tunnel it
+const TRAY = { x: OX + 216, y: OY + 797, w: 190, h: 30 };    // interior, shallow end
 const TRAY_CAP = 25;
 const TRAY_DROP = 30;                        // how far the tray floor falls to the right
 const PAYOUT = 50;                           // stand-in for a jackpot, until there is one
@@ -85,13 +88,13 @@ const BEARINGS = { friction: 0.001, frictionStatic: 0, filter: DECK_FILTER };
 const GRIP = { tray: SLICK, store: BEARINGS };
 const PLAY_GRIP = { friction: 0.02, frictionStatic: 0.05 };
 
-// Balls settle a little proud of the rim before anything topples off the front.
-const SPILL_LINE = STORE_RIM - BALL_R * 1.5;
+// Balls settle well proud of the rim before anything topples off the front.
+const SPILL_LINE = STORE_RIM - BALL_R * 5.5;
 const PROUD_STEPS = 25;                      // time a ball gets to roll off a side first
 
 // Lever: pivots on its left end, swings down, fires on release.
 const LEVER_X = OX + 444;
-const LEVER_Y = OY + 706;
+const LEVER_Y = OY + 746;
 const LEVER_LEN = 108;
 const LEVER_MAX = 40;                        // degrees of travel
 const PULL_PX = 160;                         // drag distance for a full pull
@@ -167,18 +170,19 @@ function railCap() {
 // Open-topped container: a floor plus two side walls, each wall running from
 // its own end of the floor up to the declared top. `wallScale` under 1 leaves
 // the sides short, so a pile that reaches them rolls off.
-function bin(box, drop = 0, wallScale = 1, grip = {}) {
+function bin(box, drop = 0, wallScale = 1, grip = {}, floorT = PLATE) {
   const leftFloor = box.y + box.h;
   const rightFloor = leftFloor + drop;
   const lh = (leftFloor - box.y) * wallScale;
   const rh = (rightFloor - box.y) * wallScale;
 
   return [
+    // The floor thickens downwards, so its top face stays where the box says.
     slab(
       box.x + box.w / 2,
-      (leftFloor + rightFloor) / 2 + PLATE / 2,
+      (leftFloor + rightFloor) / 2 + floorT / 2,
       box.w + PLATE * 2,
-      PLATE,
+      floorT,
       Math.atan2(drop, box.w),
       grip
     ),
@@ -191,7 +195,7 @@ Composite.add(engine.world, [
   ...arc(R + WALL / 2, 0, 360, 96, WALL),
   ...arc(R - RAIL_GAP - RAIL_T / 2, RAIL_FROM, RAIL_TO, 48, RAIL_T),
   railCap(),
-  ...bin(STORE, 0, STORE_WALLS, BEARINGS),
+  ...bin(STORE, 0, STORE_WALLS, BEARINGS, STORE_FLOOR),
   ...bin(TRAY, TRAY_DROP, 1, SLICK)
 ]);
 
