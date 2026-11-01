@@ -39,7 +39,7 @@ const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // semi-axis gain per turn
 const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
 const RAIL_LIFT = 60;                        // deg, 12 o'clock to 10 o'clock
 const RAIL_SWEEP = 480;                      // deg total, outer end at 6 o'clock
-const RAIL_STEP = 1;                         // deg per segment
+const RAIL_STEP = 2;                         // deg per segment
 const RAIL_FLARE = 1.4;                      // px of semi-axis per deg, past 7 o'clock
 
 // Base ellipse. The three numbers to tune: width, height, and how far its
@@ -219,8 +219,15 @@ const railPoint = (t) => atAngle(RAIL_HEAD + t, railLift(t));
 const insideBox = (p) =>
   p.x >= OX && p.x <= OX + BOX && p.y >= OY && p.y <= OY + BOX_H;
 
-// Chord slabs along the curve, skipping the drain hole and anything the square
+// Chord slabs along the curve, skipping the drain hole and anything the window
 // would cut off. Chords, not tangents, so the flare stays aligned.
+//
+// Each slab runs well past its own chord on purpose. SAT picks the axis of
+// least overlap, and for a slab whose END is near the ball that axis is the end
+// face, whose normal points ALONG the rail: the ball gets shoved forwards or
+// backwards instead of being held in. Overlapping generously means every slab
+// the ball touches has it comfortably inside, so every normal points across the
+// channel. The sagitta this costs is under a pixel.
 function railWall() {
   const gapLo = DRAIN_T - DRAIN_SPAN / 2;
   const gapHi = DRAIN_T + DRAIN_SPAN / 2;
@@ -235,7 +242,8 @@ function railWall() {
     if (!inGap && insideBox(mid)) {
       const dx = p.x - prev.x;
       const dy = p.y - prev.y;
-      pieces.push(slab(mid.x, mid.y, Math.hypot(dx, dy) + 2, RAIL_T, Math.atan2(dy, dx), RAIL_GRIP));
+      const span = Math.hypot(dx, dy) + (BALL_R + RAIL_T / 2) * 2;
+      pieces.push(slab(mid.x, mid.y, span, RAIL_T, Math.atan2(dy, dx), RAIL_GRIP));
     }
     prev = p;
   }
@@ -457,8 +465,6 @@ Events.on(engine, 'afterUpdate', () => {
     }
 
     if (body.label === 'play') {
-      // Backstop: the hole is the only way out of the field, so anything below
-      // the window went through it however fast it was moving.
       // A flat line below the window, so the ball stays visible on its way out.
       if (y > DRAIN_Y) {
         Composite.remove(engine.world, body);
