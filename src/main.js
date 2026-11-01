@@ -29,32 +29,31 @@ const CX = OX + BOX / 2;
 const CY = OY + BOX / 2;
 
 const RAIL_T = 20;                           // thick enough that a fast ball cannot tunnel
-const RAIL_CLEAR = 28;                       // channel width
-const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // normal offset between the two windings
+const RAIL_STEP = 1;                         // deg per hitbox
 
-// One rail, traced from its inner end at 10 o'clock and swept anticlockwise.
-// It sits on the ellipse for 300 degrees to 12 o'clock, then peels away under a
-// single saturating curve for the rest of the sweep. The curve and all its
-// derivatives are zero where it leaves the ellipse, so there is no junction to
-// see, and it levels off at RAIL_MAX rather than running away.
-const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
-const RAIL_ON_ELL = 300;                     // deg spent on the ellipse
-const RAIL_RISE = 150;                       // deg, 12 o'clock to the mouth at 7
-const RAIL_EASE = 0.22;                      // how sharply it reaches full offset
-const RAIL_SWEEP = 480;                      // deg total, past the window at 6 o'clock
-const RAIL_STEP = 3;                         // deg per segment
-const CHANNEL_OUT = RAIL_T / 2 + RAIL_CLEAR / 2;   // centre of the channel
+// Two plain ellipses, in units where five reach the window. They are tangent at
+// 12 o'clock, both passing through (0, 5), and diverge from there, which is
+// what opens the channel down the left side. Nothing is offset or swept, so
+// each piece carries an ellipse's own curvature and the joint is smooth.
+const UNIT = (BOX / 2 - RAIL_T / 2) / 5;
 
-// Scaled so the offset is exactly one pitch at 10 o'clock, where the channel
-// opens. 60 of the 150 degrees of rise are spent getting there.
-const RAIL_MAX = RAIL_PITCH / (1 - Math.exp(-(((60 / RAIL_RISE) / RAIL_EASE) ** 2)));
+// 4 by 5, centred. Carries the field boundary for 300 degrees: 12 o'clock the
+// long way round to 10, leaving the 11 o'clock arc to the outer winding.
+const INNER = { x: CX, y: CY, ax: 4 * UNIT, ay: 5 * UNIT };
+const INNER_FROM = -210;                     // deg, 10 o'clock
+const INNER_TO = 90;                         // deg, 12 o'clock
 
-// Field boundary. Centred, so the hole at the bottom sits on the window's
-// vertical centre line. The rail runs flush to the window top, bottom and
-// left, and the field keeps clear of the right edge by the same offset.
-const ELL_B = BOX / 2 - RAIL_T / 2;
-const ELL_A = BOX / 2 - RAIL_T / 2 - RAIL_MAX;
-const ELL = { x: CX, y: CY };
+// x intercepts at 5.5, top at 5, bottom at 6, so it sits half a unit low. Runs
+// 12 o'clock anticlockwise to 6, overhanging the window at the left and the
+// mouth, where the drawing is clipped but the hitboxes stay.
+const OUTER = {
+  x: CX,
+  y: CY + 0.5 * UNIT,
+  ax: (5.5 * UNIT) / Math.sqrt(1 - (0.5 / 5.5) ** 2),
+  ay: 5.5 * UNIT
+};
+const OUTER_FROM = 90;                       // deg, 12 o'clock
+const OUTER_TO = 270;                        // deg, 6 o'clock
 
 const LAUNCH_DEG = -120;                     // 7 o'clock, where a ball sits
 const CAP_DEG = -114;                        // dead end just below the seat
@@ -67,8 +66,7 @@ const RETURN_HI = -100;
 // window edge rather than by any test against the curve.
 const DRAIN_PHI = -90;
 const DRAIN_W = 74;                          // px of rail removed
-const DRAIN_SPAN = ((DRAIN_W / ELL_A) * 180) / Math.PI;
-const DRAIN_T = (((DRAIN_PHI - RAIL_HEAD) % 360) + 360) % 360;
+const DRAIN_SPAN = ((DRAIN_W / INNER.ax) * 180) / Math.PI;
 const DRAIN_Y = DECK_TOP + BALL_R;
 
 // Floor is the climb from the seat to the exit: 428px, needing 15.4.
@@ -139,38 +137,28 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // Everything on the boundary is located by the ellipse parameter, anticlockwise
 // from east, with canvas y inverted so sin flips. For a near-circular ellipse
 // the parameter and the true bearing differ by only a couple of degrees.
-function ellipseNormal(phiDeg) {
+function ellAt(E, phiDeg) {
   const phi = rad(phiDeg);
-  const nx = Math.cos(phi) / ELL_A;
-  const ny = -Math.sin(phi) / ELL_B;
-  const n = Math.hypot(nx, ny);
-  return { x: nx / n, y: ny / n };
+  return { x: E.x + E.ax * Math.cos(phi), y: E.y - E.ay * Math.sin(phi) };
 }
 
-function ellipseAt(phiDeg, out = 0) {
-  const phi = rad(phiDeg);
-  const n = ellipseNormal(phiDeg);
-  return {
-    x: ELL.x + ELL_A * Math.cos(phi) + n.x * out,
-    y: ELL.y - ELL_B * Math.sin(phi) + n.y * out
-  };
-}
+const midpoint = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 
 // Unit tangent in the direction a launched ball travels, which is decreasing
 // parameter: 7 o'clock round to 10.
-function ellipseTangent(phiDeg) {
+function ellTangent(E, phiDeg) {
   const phi = rad(phiDeg);
-  const tx = ELL_A * Math.sin(phi);
-  const ty = ELL_B * Math.cos(phi);
+  const tx = E.ax * Math.sin(phi);
+  const ty = E.ay * Math.cos(phi);
   const t = Math.hypot(tx, ty);
   return { x: tx / t, y: ty / t };
 }
 
-// Where a point sits relative to the boundary: k is 1 on the ellipse, and deg
-// is its parameter.
-function ellipseK(p) {
-  const u = (p.x - ELL.x) / ELL_A;
-  const v = (ELL.y - p.y) / ELL_B;
+// Where a point sits relative to an ellipse: k is 1 on it, and deg is its
+// parameter.
+function ellK(E, p) {
+  const u = (p.x - E.x) / E.ax;
+  const v = (E.y - p.y) / E.ay;
   return { k: Math.hypot(u, v), deg: (Math.atan2(v, u) * 180) / Math.PI };
 }
 
@@ -213,46 +201,45 @@ function slab(x, y, w, h, angle = 0, grip = {}) {
   });
 }
 
-// Offset from the ellipse at `t` degrees along the sweep: one saturating curve
-// for the whole of it, flat at the start and levelling off at RAIL_MAX.
-function railLift(t) {
-  if (t <= RAIL_ON_ELL) return 0;
-  const u = (t - RAIL_ON_ELL) / RAIL_RISE;
-  return RAIL_MAX * (1 - Math.exp(-((u / RAIL_EASE) ** 2)));
+// The rail is drawn by hand as smooth arcs, so its hitboxes stay out of the
+// renderer and their faceting is never seen.
+function hide(body) {
+  body.render.visible = false;
+  return body;
 }
 
-const railPoint = (t) => ellipseAt(RAIL_HEAD + t, railLift(t));
-const insideBox = (p) => Math.abs(p.x - CX) <= BOX / 2 && Math.abs(p.y - CY) <= BOX / 2;
-
-// Chord slabs along the curve, skipping the drain hole and anything the square
-// would cut off. Chords, not tangents, so the flare stays aligned.
-function railWall() {
-  const gapLo = DRAIN_T - DRAIN_SPAN / 2;
-  const gapHi = DRAIN_T + DRAIN_SPAN / 2;
+// Matter has no curved collider of any kind, so a wall is a chain of chord
+// slabs and the only lever on smoothness is how short the chords are. One
+// degree keeps every facet around 4px and the reflection normal within half a
+// degree of the true one. Slabs overlap by 2 so the chain cannot leak, but no
+// more, or a ball would be resolved against several faces at once.
+function ellWall(E, fromDeg, toDeg, skip) {
   const pieces = [];
-  let prev = railPoint(0);
+  let prev = ellAt(E, fromDeg);
 
-  for (let t = RAIL_STEP; t <= RAIL_SWEEP; t += RAIL_STEP) {
-    const p = railPoint(t);
-    const mid = { x: (prev.x + p.x) / 2, y: (prev.y + p.y) / 2 };
-    const inGap = t > gapLo && t - RAIL_STEP < gapHi;
+  for (let d = fromDeg + RAIL_STEP; d <= toDeg; d += RAIL_STEP) {
+    const p = ellAt(E, d);
 
-    if (!inGap && insideBox(mid)) {
+    if (!skip || !skip(d - RAIL_STEP / 2)) {
       const dx = p.x - prev.x;
       const dy = p.y - prev.y;
-      pieces.push(slab(mid.x, mid.y, Math.hypot(dx, dy) + RAIL_T, RAIL_T, Math.atan2(dy, dx)));
+      const mid = midpoint(prev, p);
+      pieces.push(hide(slab(mid.x, mid.y, Math.hypot(dx, dy) + 2, RAIL_T, Math.atan2(dy, dx))));
     }
     prev = p;
   }
   return pieces;
 }
 
+const inDrainGap = (deg) => Math.abs(deg - DRAIN_PHI) < DRAIN_SPAN / 2;
+
 // Dead end below the seat: without it a stalled shot runs out of the mouth.
-// Laid along the normal, so it closes the channel rather than lining it.
+// Spans the channel rather than lining it.
 function railCap() {
-  const p = ellipseAt(CAP_DEG, CHANNEL_OUT);
-  const n = ellipseNormal(CAP_DEG);
-  return slab(p.x, p.y, RAIL_PITCH + 30, RAIL_T * 0.6, Math.atan2(n.y, n.x));
+  const a = ellAt(INNER, CAP_DEG);
+  const b = ellAt(OUTER, CAP_DEG);
+  const mid = midpoint(a, b);
+  return hide(slab(mid.x, mid.y, Math.hypot(b.x - a.x, b.y - a.y), RAIL_T * 0.6, Math.atan2(b.y - a.y, b.x - a.x)));
 }
 
 // Open-topped container. Each wall runs from its own end of the floor up to
@@ -279,7 +266,8 @@ function bin(box, drop = 0, wallScale = 1, grip = {}, floorT = PLATE, wallAdd = 
 }
 
 Composite.add(engine.world, [
-  ...railWall(),
+  ...ellWall(INNER, INNER_FROM, INNER_TO, inDrainGap),
+  ...ellWall(OUTER, OUTER_FROM, OUTER_TO),
   railCap(),
   ...bin(STORE, 0, STORE_WALLS, BEARINGS, STORE_FLOOR, STORE_WALL_ADD),
   ...bin(TRAY, TRAY_DROP, 1, SLICK)
@@ -287,10 +275,14 @@ Composite.add(engine.world, [
 
 /* ---- balls ------------------------------------------------------------- */
 
+// Matter approximates a circle with a polygon, and at this radius that is only
+// ten sides: a 36 degree facet, which is coarser than the rail. Balls in play
+// get 24 so they roll the channel cleanly. circleRadius keeps them drawn round.
 function ball(x, y, label) {
   const grip = GRIP[label] || PLAY_GRIP;
-  return Bodies.circle(x, y, BALL_R, {
+  return Bodies.polygon(x, y, label === 'play' ? 24 : 10, BALL_R, {
     label,
+    circleRadius: BALL_R,
     restitution: 0.45,
     friction: grip.friction,
     frictionStatic: grip.frictionStatic,
@@ -413,8 +405,8 @@ function launch(power) {
   const next = tray.reduce((a, b) => (b.position.x > a.position.x ? b : a));
   Composite.remove(engine.world, next);
 
-  const seat = ellipseAt(LAUNCH_DEG, CHANNEL_OUT);
-  const dir = ellipseTangent(LAUNCH_DEG);
+  const seat = midpoint(ellAt(INNER, LAUNCH_DEG), ellAt(OUTER, LAUNCH_DEG));
+  const dir = ellTangent(INNER, LAUNCH_DEG);
   const shot = ball(seat.x, seat.y, 'play');
 
   Composite.add(engine.world, shot);
@@ -424,8 +416,8 @@ function launch(power) {
 // Back below the seat and into the capped pocket. Anything in play sits well
 // inside the ellipse, so requiring k above 1 keeps the field out of it.
 function inReturn(p) {
-  const { k, deg } = ellipseK(p);
-  if (k < 1 || k > 1 + (RAIL_PITCH + 20) / ELL_A) return false;
+  const { k, deg } = ellK(INNER, p);
+  if (k < 1) return false;
   return deg > RETURN_LO && deg < RETURN_HI;
 }
 
@@ -506,20 +498,28 @@ Events.on(render, 'afterRender', () => {
   ctx.lineWidth = 2;
   ctx.strokeRect(OX, OY, BOX, BOX);
 
-  // The hole, marked across the gap left in the rail.
+  // The rail is drawn as true ellipse arcs rather than from its hitboxes, so
+  // the picture carries none of the faceting the physics is stuck with. Canvas
+  // angles run the other way, hence the negated parameters. Clipped to the
+  // window, which is what trims the outer winding where it overhangs.
+  ctx.save();
   ctx.beginPath();
-  ctx.ellipse(
-    ELL.x,
-    ELL.y,
-    ELL_A,
-    ELL_B,
-    0,
-    rad(-DRAIN_PHI - DRAIN_SPAN / 2),
-    rad(-DRAIN_PHI + DRAIN_SPAN / 2)
-  );
-  ctx.strokeStyle = '#e0574a';
+  ctx.rect(OX, OY, BOX, BOX);
+  ctx.clip();
   ctx.lineWidth = RAIL_T;
+
+  ctx.strokeStyle = '#2d3a4b';
+  ctx.beginPath();
+  ctx.ellipse(INNER.x, INNER.y, INNER.ax, INNER.ay, 0, rad(-INNER_TO), rad(-DRAIN_PHI - DRAIN_SPAN / 2));
+  ctx.ellipse(INNER.x, INNER.y, INNER.ax, INNER.ay, 0, rad(-DRAIN_PHI + DRAIN_SPAN / 2), rad(-INNER_FROM));
+  ctx.ellipse(OUTER.x, OUTER.y, OUTER.ax, OUTER.ay, 0, rad(-OUTER_FROM), rad(-OUTER_TO), true);
   ctx.stroke();
+
+  ctx.strokeStyle = '#e0574a';
+  ctx.beginPath();
+  ctx.ellipse(INNER.x, INNER.y, INNER.ax, INNER.ay, 0, rad(-DRAIN_PHI - DRAIN_SPAN / 2), rad(-DRAIN_PHI + DRAIN_SPAN / 2));
+  ctx.stroke();
+  ctx.restore();
 
   // Clipped to the deck, so the glass box occludes a payout dropping in.
   ctx.save();
@@ -621,4 +621,4 @@ Render.run(render);
 Runner.run(Runner.create(), engine);
 draw();
 
-window.__debug = { engine, Composite, state, lever, feed, counts, railLift, railPoint, ellipseK };
+window.__debug = { engine, Composite, state, lever, feed, counts, INNER, OUTER, ellAt, ellK };
