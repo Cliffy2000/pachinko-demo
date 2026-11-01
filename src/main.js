@@ -87,7 +87,7 @@ const PLAY_GRIP = { friction: 0.02, frictionStatic: 0.05 };
 
 // Balls settle a little proud of the rim before anything topples off the front.
 const SPILL_LINE = STORE_RIM - BALL_R * 1.5;
-const PROUD_STEPS = 120;                     // time a ball gets to roll off a side first
+const PROUD_STEPS = 25;                      // time a ball gets to roll off a side first
 
 // Lever: pivots on its left end, swings down, fires on release.
 const LEVER_X = OX + 444;
@@ -111,6 +111,12 @@ const feed = { tray: 0, store: 0 };
 const engine = Engine.create();
 engine.gravity.y = 1;
 engine.enableSleeping = true;                // a settled storage pile costs nothing
+
+// Matter lets bodies sink into each other by `slop` and only pushes them apart
+// over several passes. A deep pile compounds both, so the pack ends up tighter
+// than the balls really are. More passes, less slop, less visible overlap.
+engine.positionIterations = 12;
+engine.velocityIterations = 8;
 
 const canvas = document.getElementById('field');
 const render = Render.create({
@@ -197,14 +203,29 @@ function ball(x, y, label) {
     friction: grip.friction,
     frictionStatic: grip.frictionStatic,
     frictionAir: label === 'tray' ? 0.0002 : 0.001,
-    slop: label === 'tray' ? 0.01 : 0.05,
+    slop: 0.01,
     collisionFilter: label === 'play' ? { ...PLAY_FILTER } : { ...STOCK_FILTER },
     density: 0.004,
     // Tray balls have to keep sliding down to the lever as it empties, so they
     // are never allowed to fall asleep.
     sleepThreshold: label === 'tray' ? Infinity : 60,
-    render: { fillStyle: '#e8eef5' }
+    // Deck balls are drawn by hand after the field, so the glass box can sit in
+    // front of them. Matter skips anything marked invisible.
+    render: { fillStyle: '#e8eef5', visible: label === 'play' }
   });
+}
+
+function ballsLabelled(...labels) {
+  return Composite.allBodies(engine.world).filter((b) => labels.includes(b.label));
+}
+
+function paintBalls(ctx, bodies) {
+  ctx.fillStyle = '#e8eef5';
+  for (const b of bodies) {
+    ctx.beginPath();
+    ctx.arc(b.position.x, b.position.y, BALL_R, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function isBall(body) {
@@ -339,9 +360,6 @@ Events.on(engine, 'afterUpdate', () => {
     // A ball stranded above the rim gets a moment to roll off a side wall. Only
     // if it is still sitting there does it topple off the front.
     if (body.label === 'store') {
-      // Hidden while falling behind the glass box, shown once it reaches the deck.
-      body.render.visible = body.position.y > DECK_TOP;
-
       const proud = body.position.y > DECK_TOP && body.position.y < SPILL_LINE;
       if (proud && body.speed < 0.5) {
         body.proud = (body.proud || 0) + 1;
@@ -371,6 +389,18 @@ Events.on(render, 'afterRender', () => {
   // The losing hole, drawn exactly where the hitbox is.
   ctx.fillStyle = '#e0574a';
   ctx.fillRect(CX - DRAIN_W / 2, DRAIN_TOP, DRAIN_W, DRAIN_H);
+
+  // Deck balls, clipped to below the glass box, so a payout dropping in slides
+  // out from behind the machine face instead of appearing on top of it.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, DECK_TOP, WIDTH, HEIGHT - DECK_TOP);
+  ctx.clip();
+  paintBalls(ctx, ballsLabelled('store', 'tray'));
+  ctx.restore();
+
+  // A ball spilling off the front is in front of everything, so it is not clipped.
+  paintBalls(ctx, ballsLabelled('spill'));
 
   ctx.translate(LEVER_X, LEVER_Y);
   ctx.rotate(rad(LEVER_MAX * lever.pull));
