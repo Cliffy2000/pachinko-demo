@@ -111,7 +111,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // Angles run anticlockwise from east; canvas y is inverted, so sin flips.
 const atAngle = (r, deg) => ({ x: CX + r * Math.cos(rad(deg)), y: CY - r * Math.sin(rad(deg)) });
 
-const state = { drained: 0 };
+const state = { drained: 0, spilled: 0 };
 const lever = { pull: 0, dragging: false, fromY: 0, fromPull: 0 };
 const counts = { tray: 0, store: 0, play: 0 };
 const feed = { tray: 0, store: 0 };
@@ -365,8 +365,12 @@ Events.on(engine, 'afterUpdate', () => {
   for (const body of Composite.allBodies(engine.world)) {
     if (!isBall(body)) continue;
 
-    if (body.position.y > HEIGHT + 40) {     // off canvas, out of the machine
+    // Side spills roll off a wall, front spills drop down the face, and nothing
+    // catches either, so both leave through the bottom. One check counts both.
+    const { x, y } = body.position;
+    if (y > HEIGHT + 40 || x < -40 || x > WIDTH + 40) {
       Composite.remove(engine.world, body);
+      state.spilled += 1;
       continue;
     }
 
@@ -463,7 +467,8 @@ const out = {
   tray: document.getElementById('stat-tray'),
   store: document.getElementById('stat-store'),
   live: document.getElementById('stat-live'),
-  drained: document.getElementById('stat-drained')
+  drained: document.getElementById('stat-drained'),
+  spilled: document.getElementById('stat-spilled')
 };
 
 function draw() {
@@ -471,6 +476,7 @@ function draw() {
   out.store.textContent = counts.store;
   out.live.textContent = counts.play;
   out.drained.textContent = state.drained;
+  out.spilled.textContent = state.spilled;
 }
 
 function leverTip() {
