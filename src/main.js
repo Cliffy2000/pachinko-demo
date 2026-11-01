@@ -6,24 +6,32 @@ const WIDTH = 600;
 const HEIGHT = 800;
 const BOX = 600;                             // the square glass box on top
 const WALL = 20;
-const BALL_R = 7;
+const BALL_R = 8.4;                          // 20% up from the original 7
 
 // Circular playfield inscribed in the square box.
 const CX = BOX / 2;
 const CY = BOX / 2;
 const R = BOX / 2 - WALL;                    // inner face of the circular wall
 
-// The launch channel is a rail concentric with the wall, open at both ends. A
-// ball enters at the lower right and rides the inside of the wall to the top.
+// The launch channel runs up the inside of the left wall, roughly 7 through to
+// 10 on a clock face, so a ball fired into it travels clockwise. Its lower end
+// is capped, which is what lets a weak shot come back instead of draining.
 const RAIL_GAP = 28;                         // clear width of the channel
 const RAIL_T = 8;
-const RAIL_FROM = -75;                       // degrees; lower end, by the lever
-const RAIL_TO = 100;                         // degrees; upper end, into the field
-const LAUNCH_DEG = -70;
-const DRAIN_Y = CY + R - BALL_R - 8;
+const RAIL_FROM = -105;                      // degrees; capped end, below the seat
+const RAIL_TO = -210;                        // degrees; 10 on the clock, into the field
+const LAUNCH_DEG = -122;                     // degrees; 7 on the clock, where a ball sits
 
-const MIN_POWER = 16;
-const MAX_POWER = 26;
+// A shot that stalls slides back into the capped pocket and goes to the tray.
+// Only the hole at the bottom centre of the circle loses a ball.
+const RETURN_LO = -118;
+const RETURN_HI = -95;
+const DRAIN_W = 110;
+const DRAIN_H = 26;
+const DRAIN_TOP = CY + R - DRAIN_H;
+
+const MIN_POWER = 11;
+const MAX_POWER = 19;
 const ADD_BALLS = 100;                       // placeholder until the tray is specced
 
 // Lever: pivots on its left end, swings down, fires on release.
@@ -34,7 +42,8 @@ const LEVER_MAX = 60;                        // degrees of travel
 const PULL_PX = 160;                         // drag distance for a full pull
 const GRAB_R = 36;
 
-const TRAY = { x: 30, y: 628, w: 350, h: 140 };
+// Ball tray: the floor slopes down to the right, towards the lever.
+const TRAY = { x: 40, y: 640, w: 340, floorL: 716, floorR: 764 };
 
 // Angles are measured the maths way: 0 is right, 90 is straight up. Canvas y
 // runs the other way, so every conversion flips it.
@@ -85,9 +94,17 @@ function arc(r, fromDeg, toDeg, segments, thickness) {
   return pieces;
 }
 
+// Closes the bottom of the channel so a stalled ball collects instead of
+// spilling into the field. Laid along the radius, not across it.
+function railCap() {
+  const p = atAngle(R - RAIL_GAP / 2, RAIL_FROM);
+  return slab(p.x, p.y, RAIL_GAP + RAIL_T, RAIL_T, -rad(RAIL_FROM));
+}
+
 Composite.add(engine.world, [
   ...arc(R + WALL / 2, 0, 360, 96, WALL),
-  ...arc(R - RAIL_GAP - RAIL_T / 2, RAIL_FROM, RAIL_TO, 48, RAIL_T)
+  ...arc(R - RAIL_GAP - RAIL_T / 2, RAIL_FROM, RAIL_TO, 48, RAIL_T),
+  railCap()
 ]);
 
 function launch(power) {
@@ -104,19 +121,37 @@ function launch(power) {
     render: { fillStyle: '#e8eef5' }
   });
 
-  // Fire tangent to the wall, heading up the right side of the channel.
+  // Tangent to the wall, heading clockwise: up the left side of the channel.
   const t = rad(LAUNCH_DEG);
   Composite.add(engine.world, ball);
-  Body.setVelocity(ball, { x: -Math.sin(t) * power, y: -Math.cos(t) * power });
+  Body.setVelocity(ball, { x: Math.sin(t) * power, y: Math.cos(t) * power });
 }
 
-// Anything that reaches the bottom is out of play, whether it drained through
-// the field or dribbled back down the rail on a weak shot.
+function inDrain(p) {
+  return p.y > DRAIN_TOP && Math.abs(p.x - CX) < DRAIN_W / 2;
+}
+
+// True once a ball has slid back below its seat and into the capped pocket.
+function inReturn(p) {
+  const dx = p.x - CX;
+  const dy = CY - p.y;
+  const r = Math.hypot(dx, dy);
+  if (r < R - RAIL_GAP || r > R) return false;
+
+  const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+  return deg > RETURN_LO && deg < RETURN_HI;
+}
+
 Events.on(engine, 'afterUpdate', () => {
   for (const body of Composite.allBodies(engine.world)) {
-    if (body.label === 'ball' && body.position.y > DRAIN_Y) {
+    if (body.label !== 'ball') continue;
+
+    if (inDrain(body.position)) {
       Composite.remove(engine.world, body);
       state.drained += 1;
+    } else if (inReturn(body.position)) {
+      Composite.remove(engine.world, body);
+      state.balls += 1;
     }
   }
   draw();
@@ -130,6 +165,10 @@ Events.on(render, 'afterRender', () => {
   ctx.lineWidth = 2;
   ctx.strokeRect(1, 1, BOX - 2, BOX - 2);
 
+  // The losing hole, drawn exactly where the hitbox is.
+  ctx.fillStyle = '#e0574a';
+  ctx.fillRect(CX - DRAIN_W / 2, DRAIN_TOP, DRAIN_W, DRAIN_H);
+
   ctx.fillStyle = '#161c26';
   ctx.fillRect(0, BOX, WIDTH, HEIGHT - BOX);
   ctx.beginPath();
@@ -137,9 +176,15 @@ Events.on(render, 'afterRender', () => {
   ctx.lineTo(WIDTH, BOX);
   ctx.stroke();
 
+  ctx.beginPath();
+  ctx.moveTo(TRAY.x, TRAY.y);
+  ctx.lineTo(TRAY.x + TRAY.w, TRAY.y);
+  ctx.lineTo(TRAY.x + TRAY.w, TRAY.floorR);
+  ctx.lineTo(TRAY.x, TRAY.floorL);
+  ctx.closePath();
   ctx.fillStyle = '#10151c';
-  ctx.fillRect(TRAY.x, TRAY.y, TRAY.w, TRAY.h);
-  ctx.strokeRect(TRAY.x, TRAY.y, TRAY.w, TRAY.h);
+  ctx.fill();
+  ctx.stroke();
 
   ctx.translate(LEVER_X, LEVER_Y);
   ctx.rotate(rad(LEVER_MAX * lever.pull));
