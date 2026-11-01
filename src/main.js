@@ -1,23 +1,24 @@
-/* Pachinko: square cabinet, circular field, lever launcher. */
+/* Pachinko: square cabinet, spiral rail, lever launcher. */
 
 const { Engine, Render, Runner, Bodies, Body, Composite, Events, Sleeping } = Matter;
 
 /* ---- cabinet ----------------------------------------------------------- */
 
-// Margins are outside the machine; overflow falls there.
-const MARGIN_TOP = 10;
-const MARGIN_SIDE = 50;
-const MARGIN_BOTTOM = 25;
-const CAB_W = 600;
-const CAB_H = 865;
-const WIDTH = CAB_W + MARGIN_SIDE * 2;
-const HEIGHT = MARGIN_TOP + CAB_H + MARGIN_BOTTOM;
-const OX = MARGIN_SIDE;
-const OY = MARGIN_TOP;
-
+const MARGIN = 25;                           // canvas border, outside the machine
+const PAD = 25;                              // cabinet border around its contents
 const BOX = 600;                             // square glass box, top of the cabinet
+const CONTENT_H = 865;                       // box top to tray floor bottom
+
+const CAB_W = BOX + PAD * 2;
+const CAB_H = CONTENT_H + PAD * 2;
+const WIDTH = CAB_W + MARGIN * 2;
+const HEIGHT = CAB_H + MARGIN * 2;
+const CAB_X = MARGIN;
+const CAB_Y = MARGIN;
+const OX = CAB_X + PAD;                      // content origin: top left of the glass box
+const OY = CAB_Y + PAD;
 const DECK_TOP = OY + BOX;                   // glass above, deck below
-const WALL = 20;
+
 const BALL_R = 8.4;
 const PITCH = BALL_R * 2 + 1;                // centre spacing, packed
 const ROW = PITCH * 0.866;                   // row spacing, hex pack
@@ -26,26 +27,35 @@ const ROW = PITCH * 0.866;                   // row spacing, hex pack
 
 const CX = OX + BOX / 2;
 const CY = OY + BOX / 2;
-const R = BOX / 2 - WALL;                    // inner face of the circular wall
 
-// Launch channel: concentric with the wall, 7 to 10 on a clock face, so a shot
-// travels clockwise. Capped at the lower end.
-const RAIL_GAP = 28;                         // clear width
-const RAIL_T = 8;
-const RAIL_FROM = -105;                      // deg, capped end
-const RAIL_TO = -210;                        // deg, opens into the field
-const LAUNCH_DEG = -122;                     // deg, seat
+// One continuous rail, traced from its inner end at 10 o'clock and swept
+// anticlockwise: circular for 300 degrees to 12 o'clock, lifting clear of
+// itself over the next 60, running parallel through the 90 degree launch
+// channel from 10 to 7, then flaring past the square on the way to 6.
+const RAIL_T = 20;                           // thick enough that a fast ball cannot tunnel
+const RAIL_CLEAR = 28;                       // channel width
+const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // radial gain per turn
+const R0 = BOX / 2 - RAIL_PITCH - RAIL_T / 2;   // outer winding sits flush with the box
+const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
+const RAIL_LIFT = 60;                        // deg, 12 o'clock to 10 o'clock
+const RAIL_SWEEP = 480;                      // deg total, outer end at 6 o'clock
+const RAIL_STEP = 3;                         // deg per segment
+const RAIL_FLARE = 1.4;                      // px of radius per deg, past 7 o'clock
+const CHANNEL_R = R0 + RAIL_PITCH / 2;
 
-// Stalled shots slide back to the cap and return to the tray. Only the hole at
-// bottom centre loses a ball.
-const RETURN_LO = -118;                      // deg
-const RETURN_HI = -95;                       // deg
-const DRAIN_W = 110;
-const DRAIN_H = 26;
-const DRAIN_TOP = CY + R - DRAIN_H;
+const LAUNCH_DEG = -120;                     // 7 o'clock, where a ball sits
+const CAP_DEG = -114;                        // dead end just below the seat
+const RETURN_LO = -118;                      // stalled shots land between these
+const RETURN_HI = -100;
 
-const MIN_POWER = 11;                        // px/step, falls short of the exit
-const MAX_POWER = 19;                        // px/step
+// Hole in the rail at the bottom. The only way to lose a ball in play.
+const DRAIN_DEG = -90;
+const DRAIN_SPAN = 17.4;                     // deg, about 73px of rail
+const DRAIN_T = ((DRAIN_DEG - RAIL_HEAD) % 360 + 360) % 360;
+
+// Floor is the climb from the seat to the exit: 363px, needing 14.2.
+const MIN_POWER = 14;                        // px/step, just short of the exit
+const MAX_POWER = 23;                        // px/step, capped by RAIL_T against tunneling
 
 /* ---- deck -------------------------------------------------------------- */
 
@@ -110,6 +120,8 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 // Angles run anticlockwise from east; canvas y is inverted, so sin flips.
 const atAngle = (r, deg) => ({ x: CX + r * Math.cos(rad(deg)), y: CY - r * Math.sin(rad(deg)) });
+const angleOf = (p) => (Math.atan2(CY - p.y, p.x - CX) * 180) / Math.PI;
+const radiusOf = (p) => Math.hypot(p.x - CX, CY - p.y);
 
 const state = { drained: 0, spilled: 0 };
 const lever = { pull: 0, dragging: false, fromY: 0, fromPull: 0 };
@@ -150,25 +162,45 @@ function slab(x, y, w, h, angle = 0, grip = {}) {
   });
 }
 
-// Curve approximated by slabs laid tangent to a circle about the field centre.
-// Centres sit on `r`; faces land a half-thickness either side.
-function arc(r, fromDeg, toDeg, segments, thickness) {
-  const step = (toDeg - fromDeg) / segments;
-  const segLen = Math.abs(rad(step)) * r + thickness;
-  const pieces = [];
+// Radius at `t` degrees along the sweep. Flat, then the lift, then parallel
+// through the channel, then the flare out of the box.
+function railR(t) {
+  if (t <= RAIL_SWEEP - 180) return R0;
+  if (t <= RAIL_SWEEP - 120) return R0 + (RAIL_PITCH * (t - (RAIL_SWEEP - 180))) / RAIL_LIFT;
+  if (t <= RAIL_SWEEP - 30) return R0 + RAIL_PITCH;
+  return R0 + RAIL_PITCH + (t - (RAIL_SWEEP - 30)) * RAIL_FLARE;
+}
 
-  for (let i = 0; i < segments; i++) {
-    const deg = fromDeg + step * (i + 0.5);
-    const p = atAngle(r, deg);
-    pieces.push(slab(p.x, p.y, segLen, thickness, Math.PI / 2 - rad(deg)));
+const railPoint = (t) => atAngle(railR(t), RAIL_HEAD + t);
+const insideBox = (p) => Math.abs(p.x - CX) <= BOX / 2 && Math.abs(p.y - CY) <= BOX / 2;
+
+// Chord slabs along the curve, skipping the drain hole and anything the square
+// would cut off. Chords, not tangents, so the flare stays aligned.
+function railWall() {
+  const gapLo = DRAIN_T - DRAIN_SPAN / 2;
+  const gapHi = DRAIN_T + DRAIN_SPAN / 2;
+  const pieces = [];
+  let prev = railPoint(0);
+
+  for (let t = RAIL_STEP; t <= RAIL_SWEEP; t += RAIL_STEP) {
+    const p = railPoint(t);
+    const mid = { x: (prev.x + p.x) / 2, y: (prev.y + p.y) / 2 };
+    const inGap = t > gapLo && t - RAIL_STEP < gapHi;
+
+    if (!inGap && insideBox(mid)) {
+      const dx = p.x - prev.x;
+      const dy = p.y - prev.y;
+      pieces.push(slab(mid.x, mid.y, Math.hypot(dx, dy) + RAIL_T, RAIL_T, Math.atan2(dy, dx)));
+    }
+    prev = p;
   }
   return pieces;
 }
 
-// Dead end at the bottom of the channel. Laid along the radius, not across it.
+// Dead end below the seat: without it a stalled shot runs out of the mouth.
 function railCap() {
-  const p = atAngle(R - RAIL_GAP / 2, RAIL_FROM);
-  return slab(p.x, p.y, RAIL_GAP + RAIL_T, RAIL_T, -rad(RAIL_FROM));
+  const p = atAngle(CHANNEL_R + 6, CAP_DEG);
+  return slab(p.x, p.y, RAIL_PITCH + 30, RAIL_T * 0.6, -rad(CAP_DEG));
 }
 
 // Open-topped container. Each wall runs from its own end of the floor up to
@@ -195,8 +227,7 @@ function bin(box, drop = 0, wallScale = 1, grip = {}, floorT = PLATE, wallAdd = 
 }
 
 Composite.add(engine.world, [
-  ...arc(R + WALL / 2, 0, 360, 96, WALL),
-  ...arc(R - RAIL_GAP - RAIL_T / 2, RAIL_FROM, RAIL_TO, 48, RAIL_T),
+  ...railWall(),
   railCap(),
   ...bin(STORE, 0, STORE_WALLS, BEARINGS, STORE_FLOOR, STORE_WALL_ADD),
   ...bin(TRAY, TRAY_DROP, 1, SLICK)
@@ -330,7 +361,7 @@ function launch(power) {
   const next = tray.reduce((a, b) => (b.position.x > a.position.x ? b : a));
   Composite.remove(engine.world, next);
 
-  const seat = atAngle(R - RAIL_GAP / 2, LAUNCH_DEG);
+  const seat = atAngle(CHANNEL_R, LAUNCH_DEG);
   const shot = ball(seat.x, seat.y, 'play');
   const t = rad(LAUNCH_DEG);
 
@@ -338,18 +369,18 @@ function launch(power) {
   Body.setVelocity(shot, { x: Math.sin(t) * power, y: Math.cos(t) * power });  // tangent, clockwise
 }
 
+// Reached the rail where the hole is.
 function inDrain(p) {
-  return p.y > DRAIN_TOP && Math.abs(p.x - CX) < DRAIN_W / 2;
+  if (radiusOf(p) < R0 - RAIL_T / 2 - BALL_R) return false;
+  return Math.abs(angleOf(p) - DRAIN_DEG) < DRAIN_SPAN / 2;
 }
 
 // Back below the seat and into the capped pocket.
 function inReturn(p) {
-  const dx = p.x - CX;
-  const dy = CY - p.y;
-  const r = Math.hypot(dx, dy);
-  if (r < R - RAIL_GAP || r > R) return false;
+  const r = radiusOf(p);
+  if (r < R0 || r > R0 + RAIL_PITCH + 20) return false;
 
-  const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+  const deg = angleOf(p);
   return deg > RETURN_LO && deg < RETURN_HI;
 }
 
@@ -427,11 +458,15 @@ Events.on(render, 'afterRender', () => {
   ctx.save();
   ctx.strokeStyle = '#2d3a4b';
   ctx.lineWidth = 2;
-  ctx.strokeRect(OX, OY, CAB_W, CAB_H);
+  ctx.strokeRect(CAB_X, CAB_Y, CAB_W, CAB_H);
   ctx.strokeRect(OX, OY, BOX, BOX);
 
-  ctx.fillStyle = '#e0574a';
-  ctx.fillRect(CX - DRAIN_W / 2, DRAIN_TOP, DRAIN_W, DRAIN_H);   // the losing hole
+  // The hole, marked across the gap left in the rail.
+  ctx.beginPath();
+  ctx.arc(CX, CY, R0, rad(-DRAIN_DEG - DRAIN_SPAN / 2), rad(-DRAIN_DEG + DRAIN_SPAN / 2));
+  ctx.strokeStyle = '#e0574a';
+  ctx.lineWidth = RAIL_T;
+  ctx.stroke();
 
   // Clipped to the deck, so the glass box occludes a payout dropping in.
   ctx.save();
@@ -533,4 +568,4 @@ Render.run(render);
 Runner.run(Runner.create(), engine);
 draw();
 
-window.__debug = { engine, Composite, state, lever, feed, counts };
+window.__debug = { engine, Composite, state, lever, feed, counts, railR, railPoint };
