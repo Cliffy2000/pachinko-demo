@@ -7,13 +7,13 @@ const { Engine, Render, Runner, Bodies, Body, Composite, Events, Sleeping } = Ma
 // The one gap, from the canvas edge to the machine on every side.
 const MARGIN = 20;
 const BOX = 600;                             // glass window, width
-const CONTENT_H = 865;                       // window top to tray floor bottom
+const CONTENT_H = 835;                       // window top to tray floor bottom
 
 const WIDTH = BOX + MARGIN * 2;
 const HEIGHT = CONTENT_H + MARGIN * 2;
 const OX = MARGIN;                           // top left of the glass window
 const OY = MARGIN;
-const BOX_LIFT = 40;                         // the window bottom, raised to meet the curve
+const BOX_LIFT = 50;                         // the window bottom, raised across the rail
 const BOX_H = BOX - BOX_LIFT;
 const DECK_TOP = OY + BOX_H;                 // glass above, deck below
 
@@ -72,12 +72,12 @@ const MAX_POWER = 25;                        // px/step, capped by RAIL_T agains
 /* ---- deck -------------------------------------------------------------- */
 
 const PLATE = 8;                             // wall and floor thickness
-const STORE = { x: OX + 28, y: OY + 637, w: 384, h: 110 };   // interior
+const STORE = { x: OX + 28, y: OY + 607, w: 384, h: 110 };   // interior
 const STORE_WALLS = 0.64;                    // short sides, so the pile spills
 const STORE_WALL_ADD = 10;
 const STORE_RIM = STORE.y + STORE.h - (STORE.h * STORE_WALLS + STORE_WALL_ADD);
 const STORE_FLOOR = PLATE + 20;              // deep enough that a payout cannot tunnel
-const TRAY = { x: OX + 216, y: OY + 797, w: 190, h: 30 };    // interior at the shallow end
+const TRAY = { x: OX + 216, y: OY + 767, w: 190, h: 30 };    // interior at the shallow end
 const TRAY_CAP = 25;
 const TRAY_DROP = 30;                        // floor fall, left to right
 const PAYOUT = 50;                           // stand-in for a jackpot
@@ -96,7 +96,7 @@ const SPILL_DELAY = 25;                      // steps resting above the line
 /* ---- lever ------------------------------------------------------------- */
 
 const LEVER_X = OX + 444;
-const LEVER_Y = OY + 746;
+const LEVER_Y = OY + 716;
 const LEVER_LEN = 108;
 const LEVER_MAX = 40;                        // deg of travel
 const PULL_PX = 160;                         // drag for a full pull
