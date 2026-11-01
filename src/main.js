@@ -54,22 +54,39 @@ const TRAY_CAP = 25;
 const TRAY_DROP = 30;                        // how far the tray floor falls to the right
 const PAYOUT = 50;                           // stand-in for a jackpot, until there is one
 
+// Deck and field are separate collision worlds. Payout balls are dropped from
+// high above the deck, which means falling straight through the playfield, so
+// they must not see the circle wall and the balls in it must not see them.
+const CAT_FIELD = 0x0001;
+const CAT_DECK = 0x0002;
+const CAT_PLAY = 0x0004;
+const CAT_STOCK = 0x0008;
+const FIELD_FILTER = { category: CAT_FIELD, mask: CAT_PLAY };
+const DECK_FILTER = { category: CAT_DECK, mask: CAT_STOCK };
+const STOCK_FILTER = { category: CAT_STOCK, mask: CAT_DECK | CAT_STOCK };
+const PLAY_FILTER = { category: CAT_PLAY, mask: CAT_FIELD | CAT_PLAY };
+
 // The tray has to keep feeding itself towards the lever. Its floor and balls
 // are frictionless: Matter takes the lower friction of a contact pair but the
 // HIGHER static friction, so both sides have to be slackened or nothing moves.
 // Even then a nine degree slope is inside the solver's resting tolerance, so
 // tray balls also get a constant push down-slope. Set TRAY_PUSH to 0 to see
 // what the geometry does on its own.
-const SLICK = { friction: 0, frictionStatic: 0 };
-const TRAY_PUSH = 0.0003;                    // added acceleration, towards the lever
+const SLICK = { friction: 0, frictionStatic: 0, filter: DECK_FILTER };
+const TRAY_PUSH = 0.000225;                  // added acceleration, towards the lever
+const CHUTE_LIFT = 210;                      // payouts fall from above the glass box
+const DECK_TOP = OY + BOX;                   // payouts stay hidden until they clear this
 
 // Storage balls are near frictionless too, for a different reason: a pile with
 // grip holds an angle of repose, so a ball landing on top has no slope to run
 // down and never reaches a side wall. A slick pile levels itself and spills off
 // the edges, which is what side overflow needs.
-const BEARINGS = { friction: 0.001, frictionStatic: 0 };
+const BEARINGS = { friction: 0.001, frictionStatic: 0, filter: DECK_FILTER };
 const GRIP = { tray: SLICK, store: BEARINGS };
 const PLAY_GRIP = { friction: 0.02, frictionStatic: 0.05 };
+
+// Balls settle a little proud of the rim before anything topples off the front.
+const SPILL_LINE = STORE_RIM - BALL_R * 1.5;
 const PROUD_STEPS = 120;                     // time a ball gets to roll off a side first
 
 // Lever: pivots on its left end, swings down, fires on release.
@@ -114,6 +131,7 @@ function slab(x, y, w, h, angle = 0, grip = {}) {
     friction: grip.friction ?? 0.02,
     frictionStatic: grip.frictionStatic ?? 0.5,
     restitution: 0.1,
+    collisionFilter: grip.filter ?? FIELD_FILTER,
     render: { fillStyle: '#2d3a4b' }
   });
 }
@@ -180,6 +198,7 @@ function ball(x, y, label) {
     frictionStatic: grip.frictionStatic,
     frictionAir: label === 'tray' ? 0.0002 : 0.001,
     slop: label === 'tray' ? 0.01 : 0.05,
+    collisionFilter: label === 'play' ? { ...PLAY_FILTER } : { ...STOCK_FILTER },
     density: 0.004,
     // Tray balls have to keep sliding down to the lever as it empties, so they
     // are never allowed to fall asleep.
@@ -204,7 +223,7 @@ function occupied(x, y, reach = PITCH * 0.95) {
 // the last one is clear of it, which is what keeps new balls landing on top of
 // the pile instead of inside it.
 function dispenseStore() {
-  const y = STORE_RIM - BALL_R - 10;
+  const y = STORE_RIM - BALL_R - 10 - CHUTE_LIFT;
 
   // Anywhere across the width, so the box fills and spills evenly rather than
   // growing a column in the middle. A blocked spot just retries next step.
@@ -320,7 +339,11 @@ Events.on(engine, 'afterUpdate', () => {
     // A ball stranded above the rim gets a moment to roll off a side wall. Only
     // if it is still sitting there does it topple off the front.
     if (body.label === 'store') {
-      if (body.position.y < STORE_RIM && body.speed < 0.5) {
+      // Hidden while falling behind the glass box, shown once it reaches the deck.
+      body.render.visible = body.position.y > DECK_TOP;
+
+      const proud = body.position.y > DECK_TOP && body.position.y < SPILL_LINE;
+      if (proud && body.speed < 0.5) {
         body.proud = (body.proud || 0) + 1;
         if (body.proud > PROUD_STEPS) {
           spillForward(body);
