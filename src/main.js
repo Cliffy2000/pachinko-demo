@@ -50,7 +50,8 @@ const MAX_POWER = 19;
 const PLATE = 8;                             // thickness of a box wall or floor
 const STORE = { x: OX + 28, y: OY + 652, w: 384, h: 110 };   // interior
 const STORE_WALLS = 0.64;                    // side walls run short, so the pile spills
-const STORE_RIM = STORE.y + STORE.h - STORE.h * STORE_WALLS;
+const STORE_WALL_ADD = 10;
+const STORE_RIM = STORE.y + STORE.h - (STORE.h * STORE_WALLS + STORE_WALL_ADD);
 const STORE_FLOOR = PLATE + 20;              // thick, so a fast payout cannot tunnel it
 const TRAY = { x: OX + 216, y: OY + 797, w: 190, h: 30 };    // interior, shallow end
 const TRAY_CAP = 25;
@@ -88,8 +89,10 @@ const BEARINGS = { friction: 0.001, frictionStatic: 0, filter: DECK_FILTER };
 const GRIP = { tray: SLICK, store: BEARINGS };
 const PLAY_GRIP = { friction: 0.02, frictionStatic: 0.05 };
 
-// Balls settle well proud of the rim before anything topples off the front.
-const SPILL_LINE = STORE_RIM - BALL_R * 5.5;
+// Front spill opens at the rim, which is the exact height at which a ball can
+// also roll off a side wall. Any higher and the pile has to clear the rim
+// first, which means side overflow always starts before front spill can.
+const SPILL_LINE = STORE_RIM;
 const PROUD_STEPS = 25;                      // time a ball gets to roll off a side first
 
 // Lever: pivots on its left end, swings down, fires on release.
@@ -170,11 +173,11 @@ function railCap() {
 // Open-topped container: a floor plus two side walls, each wall running from
 // its own end of the floor up to the declared top. `wallScale` under 1 leaves
 // the sides short, so a pile that reaches them rolls off.
-function bin(box, drop = 0, wallScale = 1, grip = {}, floorT = PLATE) {
+function bin(box, drop = 0, wallScale = 1, grip = {}, floorT = PLATE, wallAdd = 0) {
   const leftFloor = box.y + box.h;
   const rightFloor = leftFloor + drop;
-  const lh = (leftFloor - box.y) * wallScale;
-  const rh = (rightFloor - box.y) * wallScale;
+  const lh = (leftFloor - box.y) * wallScale + wallAdd;
+  const rh = (rightFloor - box.y) * wallScale + wallAdd;
 
   return [
     // The floor thickens downwards, so its top face stays where the box says.
@@ -195,7 +198,7 @@ Composite.add(engine.world, [
   ...arc(R + WALL / 2, 0, 360, 96, WALL),
   ...arc(R - RAIL_GAP - RAIL_T / 2, RAIL_FROM, RAIL_TO, 48, RAIL_T),
   railCap(),
-  ...bin(STORE, 0, STORE_WALLS, BEARINGS, STORE_FLOOR),
+  ...bin(STORE, 0, STORE_WALLS, BEARINGS, STORE_FLOOR, STORE_WALL_ADD),
   ...bin(TRAY, TRAY_DROP, 1, SLICK)
 ]);
 
