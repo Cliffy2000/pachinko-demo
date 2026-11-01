@@ -8,11 +8,12 @@
 </head>
 <body>
   <main class="cabinet">
-    <canvas id="field" width="600" height="800"></canvas>
+    <canvas id="field" width="700" height="900"></canvas>
 
     <section class="panel">
       <div class="readout">
-        <div class="stat"><span class="label">Balls</span><span id="stat-balls">0</span></div>
+        <div class="stat"><span class="label">Tray</span><span id="stat-tray">0</span></div>
+        <div class="stat"><span class="label">Storage</span><span id="stat-store">0</span></div>
         <div class="stat"><span class="label">In play</span><span id="stat-live">0</span></div>
         <div class="stat"><span class="label">Drained</span><span id="stat-drained">0</span></div>
       </div>
@@ -22,7 +23,8 @@
         <input id="power" type="range" min="0" max="100" value="75">
       </label>
 
-      <button id="add-balls" type="button">Add balls</button>
+      <button id="add-balls" type="button">Fill tray</button>
+      <button id="payout" type="button">Payout 50</button>
       <p class="hint">Drag the lever down and let go.</p>
     </section>
   </main>
