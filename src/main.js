@@ -40,7 +40,6 @@ const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
 const RAIL_LIFT = 60;                        // deg, 12 o'clock to 10 o'clock
 const RAIL_SWEEP = 480;                      // deg total, outer end at 6 o'clock
 const RAIL_STEP = 2;                         // deg per segment
-const RAIL_FLARE = 1.4;                      // px of semi-axis per deg, past 7 o'clock
 
 // Base ellipse. The three numbers to tune: width, height, and how far its
 // centre sits above the window's own centre.
@@ -53,9 +52,6 @@ const CHANNEL_L = RAIL_T / 2 + RAIL_CLEAR / 2;     // lift at the middle of the 
 const SEAT_L = RAIL_PITCH - RAIL_T / 2 - BALL_R - 0.5;   // against the outer wall
 
 const LAUNCH_DEG = -120;                     // 7 o'clock, where a ball sits
-const CAP_DEG = -114;                        // dead end just below the seat
-const RETURN_LO = -118;                      // stalled shots land between these
-const RETURN_HI = -100;
 
 // Hole in the rail at the bottom, where the curve is tangent to the window.
 const DRAIN_DEG = -90;
@@ -206,18 +202,18 @@ function slab(x, y, w, h, angle = 0, grip = {}) {
   });
 }
 
-// Lift at `t` degrees along the sweep: flat, then the ramp, then parallel
-// through the channel, then the flare out of the window.
+// Lift at `t` degrees along the sweep: on the base ellipse, then the ramp, then
+// parallel the rest of the way. No flare: the channel runs smoothly out to 6
+// o'clock, ending under the hole.
 function railLift(t) {
   if (t <= RAIL_SWEEP - 180) return 0;
   if (t <= RAIL_SWEEP - 120) return (RAIL_PITCH * (t - (RAIL_SWEEP - 180))) / RAIL_LIFT;
-  if (t <= RAIL_SWEEP - 30) return RAIL_PITCH;
-  return RAIL_PITCH + (t - (RAIL_SWEEP - 30)) * RAIL_FLARE;
+  return RAIL_PITCH;
 }
 
 const railPoint = (t) => atAngle(RAIL_HEAD + t, railLift(t));
-const insideBox = (p) =>
-  p.x >= OX && p.x <= OX + BOX && p.y >= OY && p.y <= OY + BOX_H;
+// The rail is allowed below the window: the drawing is clipped, not the shape.
+const insideBox = () => true;
 
 // Chord slabs along the curve, skipping the drain hole and anything the window
 // would cut off. Chords, not tangents, so the flare stays aligned.
@@ -243,17 +239,13 @@ function railWall() {
       const dx = p.x - prev.x;
       const dy = p.y - prev.y;
       const span = Math.hypot(dx, dy) + (BALL_R + RAIL_T / 2) * 2;
-      pieces.push(slab(mid.x, mid.y, span, RAIL_T, Math.atan2(dy, dx), RAIL_GRIP));
+      const piece = slab(mid.x, mid.y, span, RAIL_T, Math.atan2(dy, dx), RAIL_GRIP);
+      piece.render.visible = false;
+      pieces.push(piece);
     }
     prev = p;
   }
   return pieces;
-}
-
-// Dead end below the seat: without it a stalled shot runs out of the mouth.
-function railCap() {
-  const p = atAngle(CAP_DEG, CHANNEL_L + 6);
-  return slab(p.x, p.y, RAIL_PITCH + 30, RAIL_T * 0.6, -rad(CAP_DEG), RAIL_GRIP);
 }
 
 // Open-topped container. Each wall runs from its own end of the floor up to
@@ -281,7 +273,6 @@ function bin(box, drop = 0, wallScale = 1, grip = {}, floorT = PLATE, wallAdd = 
 
 Composite.add(engine.world, [
   ...railWall(),
-  railCap(),
   ...bin(STORE, 0, STORE_WALLS, BEARINGS, STORE_FLOOR, STORE_WALL_ADD),
   ...bin(TRAY, TRAY_DROP, 1, SLICK)
 ]);
@@ -430,15 +421,6 @@ function launch(power) {
   Body.setVelocity(shot, { x: Math.sin(t) * power, y: Math.cos(t) * power });  // tangent, clockwise
 }
 
-// Back below the seat and into the capped pocket.
-function inReturn(p) {
-  const r = radiusOf(p);
-  if (r < 1 || r > 1 + (RAIL_PITCH + 20) / ELL_A) return false;
-
-  const deg = angleOf(p);
-  return deg > RETURN_LO && deg < RETURN_HI;
-}
-
 Events.on(engine, 'afterUpdate', () => {
   routeStock();
   if (feed.store > 0 && dispenseStore()) feed.store -= 1;
@@ -471,11 +453,6 @@ Events.on(engine, 'afterUpdate', () => {
         state.drained += 1;
         continue;
       }
-      if (inReturn(body.position)) {
-        Composite.remove(engine.world, body);
-        feed.tray += 1;
-        continue;
-      }
     }
 
     // Above the full line: a grace period to roll off a side, then out the front.
@@ -499,6 +476,19 @@ Events.on(engine, 'afterUpdate', () => {
 
 /* ---- rendering --------------------------------------------------------- */
 
+function strokeRail(ctx, from, to, style) {
+  ctx.beginPath();
+  for (let t = from; t <= to; t += 1) {
+    const p = railPoint(t);
+    if (t === from) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  }
+  const end = railPoint(to);
+  ctx.lineTo(end.x, end.y);
+  ctx.strokeStyle = style;
+  ctx.stroke();
+}
+
 function paintBalls(ctx, bodies) {
   ctx.fillStyle = '#e8eef5';
   for (const b of bodies) {
@@ -516,12 +506,23 @@ Events.on(render, 'afterRender', () => {
   ctx.lineWidth = 2;
   ctx.strokeRect(OX, OY, BOX, BOX_H);
 
-  // The hole, marked across the gap left in the rail.
+  // The rail, traced from the same function the hitboxes use, so the two can
+  // never drift apart. Clipped to the window, which is what trims the part that
+  // runs on below the hole.
+  ctx.save();
   ctx.beginPath();
-  ctx.ellipse(ELL.x, ELL.y, ELL_A, ELL_B, 0, rad(-DRAIN_DEG - DRAIN_SPAN / 2), rad(-DRAIN_DEG + DRAIN_SPAN / 2));
-  ctx.strokeStyle = '#e0574a';
+  ctx.rect(OX, OY, BOX, BOX_H);
+  ctx.clip();
   ctx.lineWidth = RAIL_T;
-  ctx.stroke();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const gapLo = DRAIN_T - DRAIN_SPAN / 2;
+  const gapHi = DRAIN_T + DRAIN_SPAN / 2;
+  strokeRail(ctx, 0, gapLo, '#2d3a4b');
+  strokeRail(ctx, gapLo, gapHi, '#e0574a');          // the hole
+  strokeRail(ctx, gapHi, RAIL_SWEEP, '#2d3a4b');
+  ctx.restore();
 
   // Clipped to the deck, so the glass box occludes a payout dropping in.
   ctx.save();
