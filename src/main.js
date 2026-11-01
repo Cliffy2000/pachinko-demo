@@ -54,6 +54,13 @@ const TRAY_CAP = 25;
 const TRAY_DROP = 30;                        // how far the tray floor falls to the right
 const PAYOUT = 50;                           // stand-in for a jackpot, until there is one
 
+// The tray has to keep feeding itself towards the lever on a shallow slope, so
+// its floor and its balls are near frictionless. Matter takes the lower
+// friction of a contact pair but the HIGHER static friction, so both sides of
+// the contact have to be slackened or nothing moves.
+const SLICK = { friction: 0.002, frictionStatic: 0 };
+const PROUD_STEPS = 45;                      // time a ball gets to roll off a side first
+
 // Lever: pivots on its left end, swings down, fires on release.
 const LEVER_X = OX + 444;
 const LEVER_Y = OY + 706;
@@ -89,11 +96,12 @@ const render = Render.create({
   }
 });
 
-function slab(x, y, w, h, angle = 0) {
+function slab(x, y, w, h, angle = 0, grip = {}) {
   return Bodies.rectangle(x, y, w, h, {
     isStatic: true,
     angle,
-    friction: 0.02,
+    friction: grip.friction ?? 0.02,
+    frictionStatic: grip.frictionStatic ?? 0.5,
     restitution: 0.1,
     render: { fillStyle: '#2d3a4b' }
   });
@@ -124,7 +132,7 @@ function railCap() {
 // Open-topped container: a floor plus two side walls, each wall running from
 // its own end of the floor up to the declared top. `wallScale` under 1 leaves
 // the sides short, so a pile that reaches them rolls off.
-function bin(box, drop = 0, wallScale = 1) {
+function bin(box, drop = 0, wallScale = 1, grip = {}) {
   const leftFloor = box.y + box.h;
   const rightFloor = leftFloor + drop;
   const lh = (leftFloor - box.y) * wallScale;
@@ -136,10 +144,11 @@ function bin(box, drop = 0, wallScale = 1) {
       (leftFloor + rightFloor) / 2 + PLATE / 2,
       box.w + PLATE * 2,
       PLATE,
-      Math.atan2(drop, box.w)
+      Math.atan2(drop, box.w),
+      grip
     ),
-    slab(box.x - PLATE / 2, leftFloor - lh / 2, PLATE, lh),
-    slab(box.x + box.w + PLATE / 2, rightFloor - rh / 2, PLATE, rh)
+    slab(box.x - PLATE / 2, leftFloor - lh / 2, PLATE, lh, 0, grip),
+    slab(box.x + box.w + PLATE / 2, rightFloor - rh / 2, PLATE, rh, 0, grip)
   ];
 }
 
@@ -148,14 +157,15 @@ Composite.add(engine.world, [
   ...arc(R - RAIL_GAP - RAIL_T / 2, RAIL_FROM, RAIL_TO, 48, RAIL_T),
   railCap(),
   ...bin(STORE, 0, STORE_WALLS),
-  ...bin(TRAY, TRAY_DROP)
+  ...bin(TRAY, TRAY_DROP, 1, SLICK)
 ]);
 
 function ball(x, y, label) {
   return Bodies.circle(x, y, BALL_R, {
     label,
     restitution: 0.45,
-    friction: 0.02,
+    friction: label === 'tray' ? SLICK.friction : 0.02,
+    frictionStatic: label === 'tray' ? SLICK.frictionStatic : 0.05,
     frictionAir: 0.001,
     density: 0.004,
     // Tray balls have to keep sliding down to the lever as it empties, so they
@@ -181,14 +191,20 @@ function occupied(x, y, reach = PITCH * 0.95) {
 // the last one is clear of it, which is what keeps new balls landing on top of
 // the pile instead of inside it.
 function dispenseStore() {
-  const x = STORE.x + STORE.w / 2 + (Math.random() - 0.5) * 40;
   const y = STORE_RIM - BALL_R - 10;
-  if (occupied(x, y)) return false;
 
-  const b = ball(x, y, 'store');
-  Composite.add(engine.world, b);
-  Body.setVelocity(b, { x: 0, y: 4 });
-  return true;
+  // Anywhere across the width, so the box fills and spills evenly rather than
+  // growing a column in the middle. A blocked spot just retries next step.
+  for (let tries = 0; tries < 6; tries++) {
+    const x = STORE.x + BALL_R + Math.random() * (STORE.w - BALL_R * 2);
+    if (occupied(x, y)) continue;
+
+    const b = ball(x, y, 'store');
+    Composite.add(engine.world, b);
+    Body.setVelocity(b, { x: 0, y: 4 });
+    return true;
+  }
+  return false;
 }
 
 // The tray sits directly under the storage floor, so there is no room to drop
@@ -284,9 +300,18 @@ Events.on(engine, 'afterUpdate', () => {
       }
     }
 
-    if (body.label === 'store' && body.position.y < STORE_RIM && body.speed < 0.5) {
-      spillForward(body);
-      continue;
+    // A ball stranded above the rim gets a moment to roll off a side wall. Only
+    // if it is still sitting there does it topple off the front.
+    if (body.label === 'store') {
+      if (body.position.y < STORE_RIM && body.speed < 0.5) {
+        body.proud = (body.proud || 0) + 1;
+        if (body.proud > PROUD_STEPS) {
+          spillForward(body);
+          continue;
+        }
+      } else {
+        body.proud = 0;
+      }
     }
 
     if (body.label in counts) counts[body.label] += 1;
