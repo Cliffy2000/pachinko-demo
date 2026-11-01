@@ -54,11 +54,14 @@ const TRAY_CAP = 25;
 const TRAY_DROP = 30;                        // how far the tray floor falls to the right
 const PAYOUT = 50;                           // stand-in for a jackpot, until there is one
 
-// The tray has to keep feeding itself towards the lever on a shallow slope, so
-// its floor and its balls are near frictionless. Matter takes the lower
-// friction of a contact pair but the HIGHER static friction, so both sides of
-// the contact have to be slackened or nothing moves.
-const SLICK = { friction: 0.002, frictionStatic: 0 };
+// The tray has to keep feeding itself towards the lever. Its floor and balls
+// are frictionless: Matter takes the lower friction of a contact pair but the
+// HIGHER static friction, so both sides have to be slackened or nothing moves.
+// Even then a nine degree slope is inside the solver's resting tolerance, so
+// tray balls also get a constant push down-slope. Set TRAY_PUSH to 0 to see
+// what the geometry does on its own.
+const SLICK = { friction: 0, frictionStatic: 0 };
+const TRAY_PUSH = 0.0006;                    // added acceleration, towards the lever
 const PROUD_STEPS = 45;                      // time a ball gets to roll off a side first
 
 // Lever: pivots on its left end, swings down, fires on release.
@@ -166,7 +169,8 @@ function ball(x, y, label) {
     restitution: 0.45,
     friction: label === 'tray' ? SLICK.friction : 0.02,
     frictionStatic: label === 'tray' ? SLICK.frictionStatic : 0.05,
-    frictionAir: 0.001,
+    frictionAir: label === 'tray' ? 0.0002 : 0.001,
+    slop: label === 'tray' ? 0.01 : 0.05,
     density: 0.004,
     // Tray balls have to keep sliding down to the lever as it empties, so they
     // are never allowed to fall asleep.
@@ -285,6 +289,10 @@ Events.on(engine, 'afterUpdate', () => {
     if (body.position.y > HEIGHT + 40) {
       Composite.remove(engine.world, body);
       continue;
+    }
+
+    if (body.label === 'tray' && TRAY_PUSH) {
+      Body.applyForce(body, body.position, { x: body.mass * TRAY_PUSH, y: 0 });
     }
 
     if (body.label === 'play') {
