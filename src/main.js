@@ -19,7 +19,6 @@ const DECK_TOP = OY + BOX_H;                 // glass above, deck below
 
 const BALL_R = 8.4;
 const PITCH = BALL_R * 2 + 1;                // centre spacing, packed
-const ROW = PITCH * 0.866;                   // row spacing, hex pack
 
 /* ---- playfield --------------------------------------------------------- */
 
@@ -38,7 +37,9 @@ const RAIL_CLEAR = 28;                       // channel width
 const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // semi-axis gain per turn
 const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
 const RAIL_LIFT = 60;                        // deg, 12 o'clock to 10 o'clock
-const RAIL_SWEEP = 480;                      // deg total, outer end at 6 o'clock
+const LIFT_FROM = 300;                       // deg, 12 o'clock: leaves the base ellipse
+const LIFT_TO = 360;                         // deg, 10 o'clock: channel fully open
+const MOUTH_TO = 480;                        // deg, 6 o'clock: mouth drop complete
 const RAIL_STEP = 2;                         // deg per segment
 const MOUTH_DROP = 25;                       // extra lift by 6 o'clock, outer winding only
 const MOUTH_FROM = 390;                      // deg of sweep where that drop eases in
@@ -54,7 +55,8 @@ const CHANNEL_L = RAIL_T / 2 + RAIL_CLEAR / 2;     // lift at the middle of the 
 
 // Where a ball is seated, as sweep: 200 degrees round from 12 o'clock. It
 // starts on the rail itself, so there is nothing to transition from.
-const LAUNCH_T = 460;
+const LAUNCH_T = 435;
+const RAIL_TAIL = 40;                        // px of rail left behind the seat
 
 // A ball in the channel is driven along the rail rather than resolved against
 // it. A launch lane is a one dimensional problem - position on the rail is a
@@ -88,7 +90,7 @@ const DRAIN_BOX = {
 // less than that in a step. The fastest perpendicular impact is about 18, so
 // there is 1.5x in hand. MAX_POWER itself is 25, but that is tangent to the
 // channel at launch, never into a wall.
-const MIN_POWER = 20.8;                        // px/step, just short of the top
+const MIN_POWER = 18.8;                        // px/step, just short of the top
 const MAX_POWER = 30;                        // px/step
 
 /* ---- deck -------------------------------------------------------------- */
@@ -224,16 +226,16 @@ function slab(x, y, w, h, angle = 0, grip = {}) {
 // the outer winding ever reaches that last stretch, so the line carrying the
 // hole stays put while the channel floor drops away under it.
 function railLift(t) {
-  if (t <= RAIL_SWEEP - 180) return 0;
-  if (t <= RAIL_SWEEP - 120) {
+  if (t <= LIFT_FROM) return 0;
+  if (t <= LIFT_TO) {
     // Smoothstep, not a straight ramp: a linear one leaves a corner in the
     // curve at both ends of the lift, which the ride feels as a kick.
-    const u = (t - (RAIL_SWEEP - 180)) / RAIL_LIFT;
+    const u = (t - LIFT_FROM) / RAIL_LIFT;
     return RAIL_PITCH * u * u * (3 - 2 * u);
   }
   if (t <= MOUTH_FROM) return RAIL_PITCH;
 
-  const u = (t - MOUTH_FROM) / (RAIL_SWEEP - MOUTH_FROM);
+  const u = (t - MOUTH_FROM) / (MOUTH_TO - MOUTH_FROM);
   return RAIL_PITCH + MOUTH_DROP * u * u * (3 - 2 * u);
 }
 
@@ -256,7 +258,7 @@ function railWall() {
   const pieces = [];
   let prev = railPoint(0);
 
-  for (let t = RAIL_STEP; t <= RAIL_SWEEP; t += RAIL_STEP) {
+  for (let t = RAIL_STEP; t <= RAIL_END; t += RAIL_STEP) {
     const p = railPoint(t);
     const mid = { x: (prev.x + p.x) / 2, y: (prev.y + p.y) / 2 };
     const inGap = t > gapLo && t - RAIL_STEP < gapHi;
@@ -312,6 +314,17 @@ function railFrame(t) {
   const len = Math.hypot(dx, dy);
   return { tx: dx / len, ty: dy / len, perDeg: len };
 }
+
+// Where the rail physically stops: a short run-off behind the seat, no more.
+const RAIL_END = (() => {
+  let t = LAUNCH_T;
+  let run = 0;
+  while (run < RAIL_TAIL && t < MOUTH_TO) {
+    run += railFrame(t).perDeg;
+    t += 1;
+  }
+  return t;
+})();
 
 Composite.add(engine.world, [
   ...railWall(),
@@ -387,27 +400,17 @@ function dispenseStore() {
   return false;
 }
 
-// Slot in the tray pack, filling the deep end first: the end the lever draws
-// from. Follows the sloped floor rather than a flat grid.
-function traySlot(i) {
-  const cols = Math.floor(TRAY.w / PITCH);
-  const row = Math.floor(i / cols);
-  const x = TRAY.x + TRAY.w - BALL_R - (i % cols) * PITCH - (row % 2) * (PITCH / 2);
-  const floorY = TRAY.y + TRAY.h + ((x - TRAY.x) / TRAY.w) * TRAY_DROP;
-  return { x, y: floorY - BALL_R - 1 - row * ROW };
-}
-
+// Fed the same way storage is: dropped through the chute above it and gated on
+// the chute being clear, rather than placed into the pack. The gap between the
+// storage floor and the tray is only 22px, so the drop is short.
 function dispenseTray() {
-  if (!occupied(TRAY_CHUTE.x, TRAY_CHUTE.y, PITCH * 0.9)) {
-    Composite.add(engine.world, ball(TRAY_CHUTE.x, TRAY_CHUTE.y, 'tray'));
-    return true;
-  }
+  for (let tries = 0; tries < 4; tries++) {
+    const x = TRAY_CHUTE.x + (Math.random() - 0.5) * 8;
+    if (occupied(x, TRAY_CHUTE.y, PITCH * 0.9)) continue;
 
-  // Chute blocked: place into the pack so a fill cannot stall.
-  for (let i = counts.tray; i < counts.tray + 12; i++) {
-    const p = traySlot(i);
-    if (occupied(p.x, p.y, PITCH * 0.9)) continue;
-    Composite.add(engine.world, ball(p.x, p.y, 'tray'));
+    const b = ball(x, TRAY_CHUTE.y, 'tray');
+    Composite.add(engine.world, b);
+    Body.setVelocity(b, { x: 0, y: 2 });
     return true;
   }
   return false;
@@ -452,7 +455,7 @@ function spillForward(body) {
 const G_STEP = engine.gravity.y * (engine.gravity.scale ?? 0.001) * (1000 / 60) ** 2;
 
 function leaveRail(body, frame) {
-  body.railT = clamp(body.railT, RAIL_TOP, RAIL_SWEEP);
+  body.railT = clamp(body.railT, RAIL_TOP, RAIL_END);
   const p = railRidePoint(body.railT);
 
   // Nudge a pixel off the wall so the ball is not already touching it when
@@ -497,8 +500,16 @@ function rideRail(body) {
   body.railV = (body.railV + G_STEP * frame.ty) * (1 - RAIL_DRAG);
   body.railT -= body.railV / frame.perDeg;
 
+  // Ran back off the end of the rail: the shot is spent, so the ball goes
+  // round to the tray rather than being dropped into the deck.
+  if (body.railT >= RAIL_END) {
+    Composite.remove(engine.world, body);
+    feed.tray += 1;
+    return;
+  }
+
   const freed = body.railT < RAIL_FREE_AT && !railHolds(body.railT, body.railV);
-  if (freed || body.railT <= RAIL_TOP || body.railT >= RAIL_SWEEP) {
+  if (freed || body.railT <= RAIL_TOP) {
     leaveRail(body, frame);
     return;
   }
@@ -628,7 +639,7 @@ Events.on(render, 'afterRender', () => {
   const gapHi = DRAIN_T + DRAIN_SPAN / 2;
   strokeRail(ctx, 0, gapLo, '#2d3a4b');
   strokeRail(ctx, gapLo, gapHi, '#e0574a');          // the hole
-  strokeRail(ctx, gapHi, RAIL_SWEEP, '#2d3a4b');
+  strokeRail(ctx, gapHi, RAIL_END, '#2d3a4b');
   ctx.restore();
 
   // Clipped to the deck, so the glass box occludes a payout dropping in.
