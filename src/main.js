@@ -40,7 +40,7 @@ const RAIL_T = 10;                           // drawn thickness
 // (a 15 degree hit came out at 0 degrees). At 20 both stop: nothing passes
 // below 31 px/step and every bounce angle is correct. 24 and 28 measured
 // identical to 20, so 20 is the whole of the fix. Our fastest ball is 26.5.
-const RAIL_HIT = 30;
+const RAIL_HIT = 22.5;
 const RAIL_CLEAR = 28;                       // channel width
 const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // semi-axis gain per turn
 const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
