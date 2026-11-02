@@ -51,9 +51,11 @@ const ELL_RISE = 18.5;
 const ELL = { x: CX, y: CY - ELL_RISE };
 
 const CHANNEL_L = RAIL_T / 2 + RAIL_CLEAR / 2;     // lift at the middle of the channel
-const LAUNCH_T = 450;                              // sweep position of the seat
 
-const LAUNCH_DEG = -120;                     // 7 o'clock, where a ball sits
+// A flat launch panel butted against the 6 o'clock end of the curve. The curve
+// is horizontal there and the mouth drop has zero slope at that point, so the
+// two meet tangentially and a ball crosses the join without a step to hit.
+const PANEL_LEN = 100;
 
 // Hole in the rail at the bottom, where the curve is tangent to the window.
 const DRAIN_DEG = -90;
@@ -157,15 +159,6 @@ function ellRadius(deg, lift) {
 function atAngle(deg, lift) {
   const r = ellRadius(deg, lift);
   return { x: ELL.x + r * Math.cos(rad(deg)), y: ELL.y - r * Math.sin(rad(deg)) };
-}
-
-// Unit tangent in the travel direction, which is decreasing angle: 7 o'clock
-// round to 10.
-function ellTangent(deg, lift) {
-  const tx = (ELL_A + lift) * Math.sin(rad(deg));
-  const ty = (ELL_B + lift) * Math.cos(rad(deg));
-  const t = Math.hypot(tx, ty);
-  return { x: tx / t, y: ty / t };
 }
 
 const angleOf = (p) => (Math.atan2((ELL.y - p.y) / ELL_B, (p.x - ELL.x) / ELL_A) * 180) / Math.PI;
@@ -284,8 +277,23 @@ function bin(box, drop = 0, wallScale = 1, grip = {}, floorT = PLATE, wallAdd = 
   ];
 }
 
+// Overlaps the curve's end by half a thickness so the join cannot leak.
+function launchPanel() {
+  const end = railPoint(RAIL_SWEEP);
+  const panel = slab(end.x + PANEL_LEN / 2, end.y, PANEL_LEN + RAIL_T, RAIL_T, 0, RAIL_GRIP);
+  panel.render.visible = false;
+  return panel;
+}
+
+// Dead centre of the panel, resting on it.
+function launchSeat() {
+  const end = railPoint(RAIL_SWEEP);
+  return { x: end.x + PANEL_LEN / 2, y: end.y - RAIL_T / 2 - BALL_R };
+}
+
 Composite.add(engine.world, [
   ...railWall(),
+  launchPanel(),
   ...bin(STORE, 0, STORE_WALLS, BEARINGS, STORE_FLOOR, STORE_WALL_ADD),
   ...bin(TRAY, TRAY_DROP, 1, SLICK)
 ]);
@@ -426,15 +434,11 @@ function launch(power) {
   const next = tray.reduce((a, b) => (b.position.x > a.position.x ? b : a));
   Composite.remove(engine.world, next);
 
-  // Seated against the outer wall wherever it happens to be, since the mouth
-  // drop means its offset is no longer one pitch.
-  const seatL = railLift(LAUNCH_T) - RAIL_T / 2 - BALL_R - 0.5;
-  const seat = atAngle(LAUNCH_DEG, seatL);
-  const dir = ellTangent(LAUNCH_DEG, seatL);
+  const seat = launchSeat();
   const shot = ball(seat.x, seat.y, 'play');
 
   Composite.add(engine.world, shot);
-  Body.setVelocity(shot, { x: dir.x * power, y: dir.y * power });
+  Body.setVelocity(shot, { x: -power, y: 0 });   // straight down the panel, to the left
 }
 
 Events.on(engine, 'afterUpdate', () => {
