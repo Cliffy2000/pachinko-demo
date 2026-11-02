@@ -190,14 +190,15 @@ const lever = { pull: 0, dragging: false, fromY: 0, fromPull: 0 };
 const counts = { tray: 0, store: 0, play: 0 };
 const feed = { tray: 0, store: 0 };
 
-// Three physics steps per drawn frame. Penetration in a pile is set by how
-// much solver work happens per second, so the only lever that reduces it
-// without touching gravity is more, smaller steps. Measured on the same 120
-// ball pile with the same seed: worst case overlap 2.77px at 60Hz, 1.92 at
-// 120, 0.88 at 180, for 14ms of physics per second of play. Matter is
-// timestep independent for gravity, so the feel does not change.
-const SUBSTEPS = 3;
-const STEP_MS = 1000 / 60 / SUBSTEPS;
+// The simulation runs at a fixed rate, independent of the display. 180Hz
+// because penetration in a pile is set by solver work per second: measured on
+// the same pile with the same seed, worst case overlap is 2.77px at 60Hz,
+// 1.92 at 120 and 0.88 at 180. Matter is timestep independent for gravity, so
+// the rate does not change the feel.
+const PHYSICS_HZ = 180;
+const STEP_MS = 1000 / PHYSICS_HZ;
+const DISPENSE_EVERY = 3;                    // dispense on the 60Hz beat
+const MAX_LAG = 100;                         // ms, so a background tab cannot pile up
 
 const engine = Engine.create();
 // Matter's default works out to 1000 px/s^2, which only reads as earth gravity
@@ -760,20 +761,76 @@ payoutButton.addEventListener('click', () => {
   feed.store += PAYOUT;
 });
 
-// Our own loop rather than Matter's Runner, so the engine can take several
-// steps per frame while dispensing and the readout stay once per frame.
-function frame() {
-  routeStock();
-  if (feed.store > 0 && dispenseStore()) feed.store -= 1;
-  if (feed.tray > 0 && dispenseTray()) feed.tray -= 1;
+// Fixed timestep with render interpolation. Physics always advances by exactly
+// STEP_MS, so the machine behaves the same on a 60Hz screen as on a 144Hz one.
+// The time left over is not thrown away and not stepped: it becomes alpha, and
+// the frame is drawn between the last two physics states. Without that second
+// half, a frame that happens to take two steps instead of three shows up as a
+// jolt, which is what an accumulator alone gets you.
+const prevPose = new Map();
+let lag = 0;
+let lastTime = null;
+let stepIndex = 0;
 
-  for (let i = 0; i < SUBSTEPS; i++) Engine.update(engine, STEP_MS);
-
-  draw();
-  requestAnimationFrame(frame);
+function snapshot() {
+  prevPose.clear();
+  for (const body of Composite.allBodies(engine.world)) {
+    if (body.isStatic) continue;
+    prevPose.set(body.id, { x: body.position.x, y: body.position.y });
+  }
 }
 
-Render.run(render);
+function step() {
+  if (stepIndex % DISPENSE_EVERY === 0) {
+    routeStock();
+    if (feed.store > 0 && dispenseStore()) feed.store -= 1;
+    if (feed.tray > 0 && dispenseTray()) feed.tray -= 1;
+  }
+  Engine.update(engine, STEP_MS);
+  stepIndex += 1;
+}
+
+// Bodies are nudged to their interpolated pose, drawn, then put back exactly.
+// setPosition shifts positionPrev by the same delta both ways, so velocity is
+// untouched. Anything that did not move is skipped, which is most of a pile.
+function drawWorld(alpha) {
+  const moved = [];
+
+  for (const body of Composite.allBodies(engine.world)) {
+    if (body.isStatic) continue;
+    const was = prevPose.get(body.id);
+    if (!was) continue;
+
+    const dx = body.position.x - was.x;
+    const dy = body.position.y - was.y;
+    if (dx === 0 && dy === 0) continue;
+
+    moved.push({ body, x: body.position.x, y: body.position.y });
+    Body.setPosition(body, { x: was.x + dx * alpha, y: was.y + dy * alpha });
+  }
+
+  Render.world(render);
+
+  for (const m of moved) Body.setPosition(m.body, { x: m.x, y: m.y });
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+
+  if (lastTime === null) lastTime = now;
+  lag = Math.min(lag + (now - lastTime), MAX_LAG);
+  lastTime = now;
+
+  while (lag >= STEP_MS) {
+    snapshot();
+    step();
+    lag -= STEP_MS;
+  }
+
+  drawWorld(lag / STEP_MS);
+  draw();
+}
+
 requestAnimationFrame(frame);
 draw();
 
