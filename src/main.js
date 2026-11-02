@@ -203,11 +203,11 @@ const engine = Engine.create();
 engine.gravity.y = 1.8;
 engine.enableSleeping = true;
 
-// A 120 ball pile settles with real penetration, not a drawing artefact:
-// measured worst case 3.20px between centres at 12 iterations, 2.33 at 20, and
-// no further gain at 30 or 50. slop does not control it (0.001 measured worse
-// than 0.01). The real driver is load, so it doubled when gravity went to 1.8.
-engine.positionIterations = 20;
+// Back at Matter's default. Raising this was worth something at one step per
+// frame, but measured against the real scene it buys 0.06px of pile overlap
+// once the engine is substepping, for a third more solver time. The substeps
+// do the work instead.
+engine.positionIterations = 12;
 engine.velocityIterations = 8;
 
 const canvas = document.getElementById('field');
