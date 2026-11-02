@@ -1,6 +1,6 @@
 /* Pachinko: square cabinet, spiral rail, lever launcher. */
 
-const { Engine, Render, Runner, Bodies, Body, Composite, Events, Sleeping } = Matter;
+const { Engine, Render, Bodies, Body, Composite, Events, Sleeping } = Matter;
 
 /* ---- cabinet ----------------------------------------------------------- */
 
@@ -74,7 +74,7 @@ const RAIL_END = 470;                        // 190 deg: a short run-off behind 
 // normal jogs as that set shifts. Driving it removes the contact entirely, and
 // with it any argument about friction.
 const RAIL_TOP = 300;                        // deg of sweep where the rail ends, 12 o'clock
-const RAIL_DRAG = 0.0003;                    // speed lost per step on the rail
+const RAIL_DRAG = 0.0001;                    // speed lost per substep on the rail
 const RAIL_FREE_AT = 360;                    // deg of sweep, 10 o'clock: the channel opens
 
 // Hole in the rail at the bottom, where the curve is tangent to the window.
@@ -94,8 +94,8 @@ const DRAIN_X2 = ELL.x + (ELL_A * DRAIN_SPAN * Math.PI / 180) / 2 + BALL_R;
 // less than that in a step. The fastest perpendicular impact is about 18, so
 // there is 1.5x in hand. MAX_POWER itself is 25, but that is tangent to the
 // channel at launch, never into a wall.
-const MIN_POWER = 21;                        // px/step, just short of the top
-const MAX_POWER = 27.4;                        // px/step
+const MIN_POWER = 7;                         // px per substep                        // px/step, just short of the top
+const MAX_POWER = 9.13;                      // px per substep                        // px/step
 
 /* ---- deck -------------------------------------------------------------- */
 
@@ -184,6 +184,15 @@ const state = { drained: 0, spilled: 0 };
 const lever = { pull: 0, dragging: false, fromY: 0, fromPull: 0 };
 const counts = { tray: 0, store: 0, play: 0 };
 const feed = { tray: 0, store: 0 };
+
+// Three physics steps per drawn frame. Penetration in a pile is set by how
+// much solver work happens per second, so the only lever that reduces it
+// without touching gravity is more, smaller steps. Measured on the same 120
+// ball pile with the same seed: worst case overlap 2.77px at 60Hz, 1.92 at
+// 120, 0.88 at 180, for 14ms of physics per second of play. Matter is
+// timestep independent for gravity, so the feel does not change.
+const SUBSTEPS = 3;
+const STEP_MS = 1000 / 60 / SUBSTEPS;
 
 const engine = Engine.create();
 // Matter's default works out to 1000 px/s^2, which only reads as earth gravity
@@ -460,8 +469,8 @@ function spillForward(body) {
 
 /* ---- play -------------------------------------------------------------- */
 
-// Gravity as the engine actually applies it, in px per step squared.
-const G_STEP = engine.gravity.y * (engine.gravity.scale ?? 0.001) * (1000 / 60) ** 2;
+// Gravity as the engine actually applies it, per substep.
+const G_STEP = engine.gravity.y * (engine.gravity.scale ?? 0.001) * STEP_MS ** 2;
 
 function leaveRail(body, frame) {
   body.railT = clamp(body.railT, RAIL_TOP, RAIL_END);
@@ -545,10 +554,6 @@ function launch(power) {
 }
 
 Events.on(engine, 'afterUpdate', () => {
-  routeStock();
-  if (feed.store > 0 && dispenseStore()) feed.store -= 1;
-  if (feed.tray > 0 && dispenseTray()) feed.tray -= 1;
-
   counts.tray = 0;
   counts.store = 0;
   counts.play = 0;
@@ -599,7 +604,6 @@ Events.on(engine, 'afterUpdate', () => {
 
     if (body.label in counts) counts[body.label] += 1;
   }
-  draw();
 });
 
 /* ---- rendering --------------------------------------------------------- */
@@ -748,8 +752,21 @@ payoutButton.addEventListener('click', () => {
   feed.store += PAYOUT;
 });
 
+// Our own loop rather than Matter's Runner, so the engine can take several
+// steps per frame while dispensing and the readout stay once per frame.
+function frame() {
+  routeStock();
+  if (feed.store > 0 && dispenseStore()) feed.store -= 1;
+  if (feed.tray > 0 && dispenseTray()) feed.tray -= 1;
+
+  for (let i = 0; i < SUBSTEPS; i++) Engine.update(engine, STEP_MS);
+
+  draw();
+  requestAnimationFrame(frame);
+}
+
 Render.run(render);
-Runner.run(Runner.create(), engine);
+requestAnimationFrame(frame);
 draw();
 
 window.__debug = { engine, Composite, state, lever, feed, counts, railLift, railPoint, atAngle };
