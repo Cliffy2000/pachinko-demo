@@ -197,7 +197,7 @@ const render = Render.create({
   options: {
     width: WIDTH,
     height: HEIGHT,
-    wireframes: false,
+    wireframes: true,          // hitbox view: every body outlined, nothing hidden
     background: 'transparent'
   }
 });
@@ -263,9 +263,7 @@ function railWall() {
       const dx = p.x - prev.x;
       const dy = p.y - prev.y;
       const span = Math.hypot(dx, dy) + (BALL_R + RAIL_T / 2) * 2;
-      const piece = slab(mid.x, mid.y, span, RAIL_T, Math.atan2(dy, dx), RAIL_GRIP);
-      piece.render.visible = false;
-      pieces.push(piece);
+      pieces.push(slab(mid.x, mid.y, span, RAIL_T, Math.atan2(dy, dx), RAIL_GRIP));
     }
     prev = p;
   }
@@ -341,7 +339,7 @@ function ball(x, y, label) {
     collisionFilter: label === 'play' ? { ...PLAY_FILTER } : { ...STOCK_FILTER },
     density: 0.004,
     sleepThreshold: label === 'tray' ? Infinity : 60,   // the tray must keep feeding
-    render: { fillStyle: '#e8eef5', visible: label === 'play' }  // deck balls drawn by hand
+    render: { fillStyle: '#e8eef5' }
   });
 }
 
@@ -623,22 +621,22 @@ Events.on(render, 'afterRender', () => {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  const gapLo = DRAIN_T - DRAIN_SPAN / 2;
-  const gapHi = DRAIN_T + DRAIN_SPAN / 2;
-  strokeRail(ctx, 0, gapLo, '#2d3a4b');
-  strokeRail(ctx, gapLo, gapHi, '#e0574a');          // the hole
-  strokeRail(ctx, gapHi, RAIL_END, '#2d3a4b');
+  // const gapLo = DRAIN_T - DRAIN_SPAN / 2;
+  // const gapHi = DRAIN_T + DRAIN_SPAN / 2;
+  // strokeRail(ctx, 0, gapLo, '#2d3a4b');
+  // strokeRail(ctx, gapLo, gapHi, '#e0574a');          // the hole
+  // strokeRail(ctx, gapHi, RAIL_END, '#2d3a4b');
   ctx.restore();
 
   // Clipped to the deck, so the glass box occludes a payout dropping in.
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, DECK_TOP, WIDTH, HEIGHT - DECK_TOP);
-  ctx.clip();
-  paintBalls(ctx, ballsLabelled('store', 'tray'));
-  ctx.restore();
-
-  paintBalls(ctx, ballsLabelled('spill'));   // in front of everything, unclipped
+  // ctx.save();
+  // ctx.beginPath();
+  // ctx.rect(0, DECK_TOP, WIDTH, HEIGHT - DECK_TOP);
+  // ctx.clip();
+  // paintBalls(ctx, ballsLabelled('store', 'tray'));
+  // ctx.restore();
+  //
+  // paintBalls(ctx, ballsLabelled('spill'));
 
   ctx.translate(LEVER_X, LEVER_Y);
   ctx.rotate(rad(LEVER_MAX * lever.pull));
