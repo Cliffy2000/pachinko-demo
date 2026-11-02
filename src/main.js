@@ -88,8 +88,8 @@ const DRAIN_BOX = {
 // less than that in a step. The fastest perpendicular impact is about 18, so
 // there is 1.5x in hand. MAX_POWER itself is 25, but that is tangent to the
 // channel at launch, never into a wall.
-const MIN_POWER = 15.5;                        // px/step, just short of the top
-const MAX_POWER = 23;                        // px/step
+const MIN_POWER = 20.8;                        // px/step, just short of the top
+const MAX_POWER = 30;                        // px/step
 
 /* ---- deck -------------------------------------------------------------- */
 
@@ -149,7 +149,7 @@ const GRIP = { tray: SLICK, store: BEARINGS };
 
 // 9 degrees is inside the solver's resting tolerance, so tray balls are pushed
 // down-slope as well. Set to 0 for geometry alone.
-const TRAY_PUSH = 0.000225;                  // added accel; gravity is 0.001
+const TRAY_PUSH = 0.000405;                  // added accel; 0.225 of gravity
 const CHUTE_LIFT = 210;                      // payout drop height above the rim
 
 const rad = (deg) => (deg * Math.PI) / 180;
@@ -180,7 +180,12 @@ const counts = { tray: 0, store: 0, play: 0 };
 const feed = { tray: 0, store: 0 };
 
 const engine = Engine.create();
-engine.gravity.y = 1;
+// Matter's default works out to 1000 px/s^2, which only reads as earth gravity
+// if a pixel is a centimetre. At that scale this ball is a 16cm shot put, hence
+// the float. True scale for an 11mm ball would be 15x, but a free ball falling
+// the height of the field must stay inside the rail's catch window, and that
+// caps it at 2.4x. Mass is no help: in free fall it cancels out.
+engine.gravity.y = 1.8;
 engine.enableSleeping = true;
 
 // Default slop and iteration count let a deep pile compress visibly.
