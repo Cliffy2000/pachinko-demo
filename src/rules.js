@@ -5,14 +5,14 @@ import { CANVAS, DECK_TOP, JACKPOT } from './config.js';
 import { KIND, allBodies, engine, remove } from './world.js';
 import { isInJackpot, isOverDrain } from './field.js';
 import { isRiding, updateRide } from './launch.js';
-import { reward, updateStorageBall, updateTrayBall } from './deck.js';
+import { reward, updateBoxBall } from './deck.js';
 import { celebrate } from './fx.js';
 import { counts, queue, stats } from './state.js';
 
 const { Events } = Matter;
 
 // Below the window a ball has left the field: over the hole it drained,
-// anywhere else it fell out of the launch area and goes back to the tray.
+// anywhere else it fell out of the launch area and goes back to the box.
 function updatePlayBall(body) {
   if (isRiding(body)) return updateRide(body);
 
@@ -27,21 +27,20 @@ function updatePlayBall(body) {
 
   remove(body);
   if (isOverDrain(body.position.x)) stats.drained += 1;
-  else queue.tray += 1;
+  else queue.box += 1;
   return false;
 }
 
 // Each returns false if it removed the body.
 const UPDATE = {
   [KIND.PLAY]: updatePlayBall,
-  [KIND.TRAY]: updateTrayBall,
-  [KIND.STORE]: updateStorageBall
+  [KIND.BOX]: updateBoxBall
 };
 
 const offCanvas = ({ x, y }) => y > CANVAS.height + 40 || x < -40 || x > CANVAS.width + 40;
 
 function updateBodies() {
-  counts.play = counts.tray = counts.store = 0;
+  counts.play = counts.box = 0;
 
   for (const body of allBodies()) {
     if (body.isStatic) continue;

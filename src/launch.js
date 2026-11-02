@@ -4,16 +4,31 @@
 
 import { LAUNCH, RAIL } from './config.js';
 import { clamp, outward, rideFrame, ridePoint, rideRadius } from './geometry.js';
-import { FILTER, GRAVITY, KIND, STEP_S, add, ball, ballsOf, remove, setVelocity } from './world.js';
-import { queue } from './state.js';
+import { FILTER, GRAVITY, KIND, STEP_S, add, ball, ballsOf, remove, setVelocity, wake } from './world.js';
+import { queue, stats } from './state.js';
 
 const { Body } = Matter;
 
-// Fire the tray ball nearest the lever.
-export function launch(speed) {
-  const tray = ballsOf(KIND.TRAY);
-  if (tray.length === 0) return;
-  remove(tray.reduce((a, b) => (b.position.x > a.position.x ? b : a)));
+// Overflow balls are only a count, so drawing one costs no physics.
+function takeFromOverflow() {
+  if (stats.spilled === 0) return false;
+  stats.spilled -= 1;
+  return true;
+}
+
+// The box ball nearest the lever.
+function takeFromBox() {
+  const pile = ballsOf(KIND.BOX);
+  if (pile.length === 0) return false;
+  remove(pile.reduce((a, b) => (b.position.x > a.position.x ? b : a)));
+  wake(pile);
+  return true;
+}
+
+// Draws from the chosen source, or the other one when it is empty.
+export function launch(speed, fromOverflow) {
+  const [first, second] = fromOverflow ? [takeFromOverflow, takeFromBox] : [takeFromBox, takeFromOverflow];
+  if (!first() && !second()) return;
 
   const seat = ridePoint(LAUNCH.seat);
   const shot = ball(KIND.PLAY, seat.x, seat.y);
@@ -53,8 +68,8 @@ export function updateRide(body) {
   ride.t -= (ride.v * STEP_S) / frame.arcPerDeg;
 
   if (ride.t >= RAIL.end) {
-    remove(body); // rolled back off the end: the ball returns to the tray
-    queue.tray += 1;
+    remove(body); // rolled back off the end: the ball returns to the box
+    queue.box += 1;
     return false;
   }
 

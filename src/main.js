@@ -2,12 +2,12 @@ import { LAUNCH, PHYSICS } from './config.js';
 import { clamp } from './geometry.js';
 import { engine } from './world.js';
 import { buildField } from './field.js';
-import { buildDeck, dispense, dispenseHz, fillTray, payout } from './deck.js';
+import { buildDeck, dispense, dispenseHz, fillBox, payout } from './deck.js';
 import { launch } from './launch.js';
 import { startRules } from './rules.js';
 import { canvas, drawFrame, rememberPoses } from './view.js';
 import { bindLever } from './input.js';
-import { bindButtons, readPower, showAuto, showPower, updatePanel } from './panel.js';
+import { bindButtons, readPower, showAuto, showPower, showSource, updatePanel } from './panel.js';
 import { runLoop } from './loop.js';
 
 const { Engine } = Matter;
@@ -16,16 +16,18 @@ buildField();
 buildDeck();
 startRules();
 
-const fire = (power) => launch(LAUNCH.minSpeed + (LAUNCH.maxSpeed - LAUNCH.minSpeed) * power);
-
 let autoFire = false;
+let fromOverflow = false;
+
+const fire = (power) => launch(LAUNCH.minSpeed + (LAUNCH.maxSpeed - LAUNCH.minSpeed) * power, fromOverflow);
 const autoPower = () => clamp(readPower() + (Math.random() * 2 - 1) * LAUNCH.autoJitter, 0, 1);
 
 bindLever(canvas, { onPull: showPower, onRelease: fire });
 bindButtons({
-  onFill: fillTray,
+  onFill: fillBox,
   onPayout: () => payout(),
-  onAuto: () => showAuto((autoFire = !autoFire))
+  onAuto: () => showAuto((autoFire = !autoFire)),
+  onSource: () => showSource((fromOverflow = !fromOverflow))
 });
 
 const fireEvery = Math.round(PHYSICS.hz * LAUNCH.autoInterval);

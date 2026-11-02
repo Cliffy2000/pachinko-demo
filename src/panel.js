@@ -5,8 +5,7 @@ import { counts, stats } from './state.js';
 const $ = (id) => document.getElementById(id);
 
 const out = {
-  tray: $('stat-tray'),
-  store: $('stat-store'),
+  box: $('stat-box'),
   live: $('stat-live'),
   drained: $('stat-drained'),
   spilled: $('stat-spilled'),
@@ -14,10 +13,10 @@ const out = {
 };
 const power = $('power');
 const autoButton = $('auto-fire');
+const sourceButton = $('launch-from');
 
 export function updatePanel() {
-  out.tray.textContent = counts.tray;
-  out.store.textContent = counts.store;
+  out.box.textContent = counts.box;
   out.live.textContent = counts.play;
   out.drained.textContent = stats.drained;
   out.spilled.textContent = stats.spilled;
@@ -35,8 +34,13 @@ export function showAuto(on) {
   autoButton.setAttribute('aria-pressed', on);
 }
 
-export function bindButtons({ onFill, onPayout, onAuto }) {
+export function showSource(fromOverflow) {
+  sourceButton.textContent = fromOverflow ? 'Launch from: overflow' : 'Launch from: box';
+}
+
+export function bindButtons({ onFill, onPayout, onAuto, onSource }) {
   $('add-balls').addEventListener('click', onFill);
   $('payout').addEventListener('click', onPayout);
   autoButton.addEventListener('click', onAuto);
+  sourceButton.addEventListener('click', onSource);
 }

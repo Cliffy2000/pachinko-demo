@@ -102,7 +102,7 @@ function drawArt(ctx) {
   });
 
   withClip(ctx, 0, DECK_TOP, CANVAS.width, CANVAS.height - DECK_TOP, () =>
-    paintBalls(ctx, ballsOf(KIND.STORE, KIND.TRAY))
+    paintBalls(ctx, ballsOf(KIND.BOX))
   );
   paintBalls(ctx, ballsOf(KIND.SPILL));
 }

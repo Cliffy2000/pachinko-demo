@@ -73,7 +73,8 @@ canvas {
 
 #add-balls,
 #payout,
-#auto-fire {
+#auto-fire,
+#launch-from {
   padding: 14px;
   font: inherit;
   font-weight: 600;
@@ -88,7 +89,8 @@ canvas {
 
 #add-balls:active,
 #payout:active,
-#auto-fire:active { filter: brightness(0.85); }
+#auto-fire:active,
+#launch-from:active { filter: brightness(0.85); }
 
 #auto-fire[aria-pressed="false"] { background: var(--edge); }
 

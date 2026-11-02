@@ -19,7 +19,7 @@ export const DECK_TOP = WINDOW.y + WINDOW.h;
 
 export const CANVAS = {
   width: WINDOW.w + MARGIN * 2,
-  height: 835 + MARGIN * 2 // window top to tray floor, plus margins
+  height: 835 + MARGIN * 2 // window top to box floor, plus margins
 };
 
 export const BALL = { r: 6.4, density: 0.004 };
@@ -111,22 +111,20 @@ export const JACKPOT = {
 
 /* ---- deck -------------------------------------------------------------- */
 
-const PLATE = 8;
+// One box holds every ball outside the field. The floor slopes down to a fixed
+// lower-right corner; the left wall's height sets the capacity.
+const BOX_W = 378;
+const BOX_DROP = BOX_W * (30 / 190); // the old tray's slope
+const BOX_DEPTH = 29;
+const BOX_CORNER = { x: MARGIN + 406, y: MARGIN + 827 };
 
 export const DECK = {
-  plate: PLATE,
-
-  storage: { x: MARGIN + 28, y: MARGIN + 607, w: 384, h: 110 },
-  storageWallScale: 0.64, // walls shorter than the box, so a full load spills
-  storageWallAdd: 10,
-  storageFloor: PLATE + 20,
+  plate: 8,
+  box: { x: BOX_CORNER.x - BOX_W, y: BOX_CORNER.y - BOX_DROP - BOX_DEPTH, w: BOX_W, h: BOX_DEPTH },
+  boxDrop: BOX_DROP,
+  capacity: 200, // what Fill tops the box up to
   dropHeight: 210, // refills fall from behind the window
   spillDelay: 0.14, // a ball resting above the rim falls out the front after this
-
-  tray: { x: MARGIN + 216, y: MARGIN + 767, w: 190, h: 30 },
-  trayDrop: 30, // floor falls this far to the right
-  trayCapacity: 25,
-  trayPush: 0.225, // extra down-slope acceleration, as a fraction of gravity
 
   payout: 50,
   dispenseHz: 60,

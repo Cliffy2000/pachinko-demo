@@ -12,8 +12,7 @@
 
     <section class="panel">
       <div class="readout">
-        <div class="stat"><span class="label">Tray</span><span id="stat-tray">0</span></div>
-        <div class="stat"><span class="label">Storage</span><span id="stat-store">0</span></div>
+        <div class="stat"><span class="label">Box</span><span id="stat-box">0</span></div>
         <div class="stat"><span class="label">In play</span><span id="stat-live">0</span></div>
         <div class="stat"><span class="label">Drained</span><span id="stat-drained">0</span></div>
         <div class="stat"><span class="label">Spilled</span><span id="stat-spilled">0</span></div>
@@ -25,9 +24,10 @@
         <input id="power" type="range" min="0" max="100" value="75">
       </label>
 
-      <button id="add-balls" type="button">Fill tray</button>
+      <button id="add-balls" type="button">Fill box</button>
       <button id="payout" type="button">Payout 50</button>
       <button id="auto-fire" type="button" aria-pressed="false">Auto fire: off</button>
+      <button id="launch-from" type="button">Launch from: box</button>
       <p class="hint">Drag the lever down and let go, or turn on auto fire at the slider's power.</p>
     </section>
   </main>
