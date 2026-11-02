@@ -99,8 +99,9 @@ export const JACKPOT = {
   x: WINDOW.x + WINDOW.w / 2,
   y: WINDOW.y + 420, // rim of the cup
   mouth: 26 * 1.6, // inner width
-  depth: 22,
+  depth: 22, // inside, rim to floor
   wall: 5,
+  floor: 7,
   reward: 100,
 
   shakeS: 0.6,
@@ -120,6 +121,7 @@ const BOX_CORNER = { x: WINDOW.x + WINDOW.w / 2 + 81, y: MARGIN + 827 };
 
 export const DECK = {
   plate: 8,
+  floor: 12,
   box: { x: BOX_CORNER.x - BOX_W, y: BOX_CORNER.y - BOX_DROP - BOX_DEPTH, w: BOX_W, h: BOX_DEPTH },
   boxDrop: BOX_DROP,
   capacity: 200, // what Fill tops the box up to

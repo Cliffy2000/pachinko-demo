@@ -17,7 +17,7 @@ export function buildDeck() {
   const piece = (x, y, w, h, angle) => wall(x, y, w, h, angle, SURFACE.box, FILTER.deck);
 
   add(
-    piece(box.x + box.w / 2, (leftFloor + rightFloor) / 2 + plate / 2, box.w + plate * 2, plate, Math.atan2(DECK.boxDrop, box.w)),
+    piece(box.x + box.w / 2, (leftFloor + rightFloor) / 2 + DECK.floor / 2, box.w + plate * 2, DECK.floor, Math.atan2(DECK.boxDrop, box.w)),
     piece(box.x - plate / 2, box.y + box.h / 2, plate, box.h, 0),
     piece(box.x + box.w + plate / 2, box.y + (box.h + DECK.boxDrop) / 2, plate, box.h + DECK.boxDrop, 0)
   );

@@ -67,21 +67,28 @@ function pinGrid() {
   return pins;
 }
 
-// Two posts with an open bottom. A ball whose centre drops below the rim
-// between them has gone in.
+// Sealed sides and floor, open only at the top. A ball whose centre drops
+// below the rim between the walls has gone in.
 const CUP = { half: JACKPOT.mouth / 2, floor: JACKPOT.y + JACKPOT.depth };
 
 export const isInJackpot = ({ x, y }) =>
   Math.abs(x - JACKPOT.x) < CUP.half && y > JACKPOT.y + BALL.r && y < CUP.floor;
 
 function cup() {
+  const piece = (x, y, w, h) => {
+    const body = wall(x, y, w, h, 0, SURFACE.pin, FILTER.field);
+    body.render.fillStyle = PALETTE.cup;
+    return body;
+  };
   const off = CUP.half + JACKPOT.wall / 2;
-  const y = JACKPOT.y + JACKPOT.depth / 2;
-  return [-off, off].map((dx) => {
-    const post = wall(JACKPOT.x + dx, y, JACKPOT.wall, JACKPOT.depth, 0, SURFACE.pin, FILTER.field);
-    post.render.fillStyle = PALETTE.cup;
-    return post;
-  });
+  const sideY = JACKPOT.y + JACKPOT.depth / 2;
+  const outer = JACKPOT.mouth + JACKPOT.wall * 2;
+
+  return [
+    piece(JACKPOT.x - off, sideY, JACKPOT.wall, JACKPOT.depth),
+    piece(JACKPOT.x + off, sideY, JACKPOT.wall, JACKPOT.depth),
+    piece(JACKPOT.x, CUP.floor + JACKPOT.floor / 2, outer, JACKPOT.floor)
+  ];
 }
 
 export function buildField() {
