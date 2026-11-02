@@ -40,16 +40,18 @@ const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
 const RAIL_LIFT = 60;                        // deg, 12 o'clock to 10 o'clock
 const RAIL_SWEEP = 480;                      // deg total, outer end at 6 o'clock
 const RAIL_STEP = 2;                         // deg per segment
+const MOUTH_DROP = 25;                       // extra lift by 6 o'clock, outer winding only
+const MOUTH_FROM = 390;                      // deg of sweep where that drop eases in
 
 // Base ellipse. The three numbers to tune: width, height, and how far its
 // centre sits above the window's own centre.
 const ELL_A = BOX / 2 - RAIL_PITCH - RAIL_T / 2;   // 242, outer winding flush left
-const ELL_B = 281;
-const ELL_RISE = 6;
+const ELL_B = 268.5;
+const ELL_RISE = 18.5;
 const ELL = { x: CX, y: CY - ELL_RISE };
 
 const CHANNEL_L = RAIL_T / 2 + RAIL_CLEAR / 2;     // lift at the middle of the channel
-const SEAT_L = RAIL_PITCH - RAIL_T / 2 - BALL_R - 0.5;   // against the outer wall
+const LAUNCH_T = 450;                              // sweep position of the seat
 
 const LAUNCH_DEG = -120;                     // 7 o'clock, where a ball sits
 
@@ -209,13 +211,17 @@ function slab(x, y, w, h, angle = 0, grip = {}) {
   });
 }
 
-// Lift at `t` degrees along the sweep: on the base ellipse, then the ramp, then
-// parallel the rest of the way. No flare: the channel runs smoothly out to 6
-// o'clock, ending under the hole.
+// Lift at `t` degrees along the sweep: on the base ellipse, then the ramp out,
+// then parallel, then easing down by MOUTH_DROP to clear the drain box. Only
+// the outer winding ever reaches that last stretch, so the line carrying the
+// hole stays put while the channel floor drops away under it.
 function railLift(t) {
   if (t <= RAIL_SWEEP - 180) return 0;
   if (t <= RAIL_SWEEP - 120) return (RAIL_PITCH * (t - (RAIL_SWEEP - 180))) / RAIL_LIFT;
-  return RAIL_PITCH;
+  if (t <= MOUTH_FROM) return RAIL_PITCH;
+
+  const u = (t - MOUTH_FROM) / (RAIL_SWEEP - MOUTH_FROM);
+  return RAIL_PITCH + MOUTH_DROP * u * u * (3 - 2 * u);
 }
 
 const railPoint = (t) => atAngle(RAIL_HEAD + t, railLift(t));
@@ -420,12 +426,15 @@ function launch(power) {
   const next = tray.reduce((a, b) => (b.position.x > a.position.x ? b : a));
   Composite.remove(engine.world, next);
 
-  const seat = atAngle(LAUNCH_DEG, SEAT_L);
+  // Seated against the outer wall wherever it happens to be, since the mouth
+  // drop means its offset is no longer one pitch.
+  const seatL = railLift(LAUNCH_T) - RAIL_T / 2 - BALL_R - 0.5;
+  const seat = atAngle(LAUNCH_DEG, seatL);
+  const dir = ellTangent(LAUNCH_DEG, seatL);
   const shot = ball(seat.x, seat.y, 'play');
-  const t = rad(LAUNCH_DEG);
 
   Composite.add(engine.world, shot);
-  Body.setVelocity(shot, { x: Math.sin(t) * power, y: Math.cos(t) * power });  // tangent, clockwise
+  Body.setVelocity(shot, { x: dir.x * power, y: dir.y * power });
 }
 
 Events.on(engine, 'afterUpdate', () => {
