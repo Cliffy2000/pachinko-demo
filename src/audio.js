@@ -40,13 +40,16 @@ function allowed(kind, gapS = 0) {
   return true;
 }
 
-function track(node) {
+// Scheduled effects pass counted: false, so they do not hold the voice cap and
+// silence the game sounds while they play out.
+function track(node, counted) {
+  if (!counted) return;
   voices += 1;
   node.onended = () => (voices -= 1);
 }
 
 // A short enveloped oscillator, optionally gliding from freq to `to`.
-function tone({ freq, to = freq, type = 'sine', gain, attack = 0.002, decay, at = 0 }) {
+function tone({ freq, to = freq, type = 'sine', gain, attack = 0.002, decay, at = 0, counted = true }) {
   const t = ctx.currentTime + at;
   const osc = ctx.createOscillator();
   const env = ctx.createGain();
@@ -61,11 +64,11 @@ function tone({ freq, to = freq, type = 'sine', gain, attack = 0.002, decay, at 
   osc.connect(env).connect(master);
   osc.start(t);
   osc.stop(t + attack + decay + 0.02);
-  track(osc);
+  track(osc, counted);
 }
 
 // A burst of filtered white noise.
-function noise({ gain, decay, filter = 'bandpass', freq = 3000, q = 1, at = 0 }) {
+function noise({ gain, decay, filter = 'bandpass', freq = 3000, q = 1, at = 0, counted = true }) {
   const t = ctx.currentTime + at;
   const src = ctx.createBufferSource();
   const band = ctx.createBiquadFilter();
@@ -81,7 +84,7 @@ function noise({ gain, decay, filter = 'bandpass', freq = 3000, q = 1, at = 0 })
   src.connect(band).connect(env).connect(master);
   src.start(t, Math.random() * 0.4);
   src.stop(t + decay + 0.02);
-  track(src);
+  track(src, counted);
 }
 
 const jitter = (spread) => 1 + (Math.random() * 2 - 1) * spread;
@@ -108,13 +111,23 @@ export function playCash() {
   tone({ freq: 2093, type: 'square', gain: 0.05, decay: 0.3, at: 0.07 });
 }
 
+// Two inharmonic partials and a tick: a coin striking coins.
+function coinClink(at) {
+  const f = 3200 + Math.random() * 2600;
+  const gain = 0.035 + Math.random() * 0.045;
+  tone({ freq: f, type: 'triangle', gain, decay: 0.09, at, counted: false });
+  tone({ freq: f * 1.47, gain: gain * 0.6, decay: 0.05, at, counted: false });
+  noise({ gain: gain * 0.8, decay: 0.012, filter: 'highpass', freq: 6000, at, counted: false });
+}
+
+// A rising run, then a clatter of coins that is densest early and thins out.
 export function playJackpot() {
   if (!allowed('jackpot')) return;
   [523, 659, 784, 1047, 1319, 1568].forEach((freq, i) =>
-    tone({ freq, type: 'triangle', gain: 0.16, decay: 0.4, at: i * 0.07 })
+    tone({ freq, type: 'triangle', gain: 0.16, decay: 0.4, at: i * 0.07, counted: false })
   );
-  for (let i = 0; i < 24; i++) {
-    tone({ freq: 2000 + Math.random() * 2500, gain: 0.03, decay: 0.15, at: 0.4 + Math.random() * 1.4 });
+  for (let i = 0; i < AUDIO.jackpotCoins; i++) {
+    coinClink(0.25 + Math.random() ** 1.6 * AUDIO.jackpotClatterS);
   }
 }
 

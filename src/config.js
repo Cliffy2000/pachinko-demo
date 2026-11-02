@@ -172,7 +172,9 @@ export const AUDIO = {
   pinGapS: 0.012, // shortest gap between two pin pings
   tapGapS: 0.01,
   minImpact: 40, // px/s; slower contacts make no sound
-  fullImpact: 900 // px/s; impacts this hard play at full volume
+  fullImpact: 900, // px/s; impacts this hard play at full volume
+  jackpotCoins: 60,
+  jackpotClatterS: 2.2
 };
 
 /* ---- lever ------------------------------------------------------------- */
