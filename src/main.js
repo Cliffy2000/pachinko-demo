@@ -481,6 +481,11 @@ function spillForward(body) {
 // Gravity as the engine actually applies it, per substep.
 const G_STEP = engine.gravity.y * (engine.gravity.scale ?? 0.001) * STEP_MS ** 2;
 
+// Matter's setVelocity takes px per 16.67ms whatever the step size, while the
+// rail ride works in px per step. Without this a ball leaving the rail keeps a
+// third of its speed and drops as if it hit a wall.
+const TO_MATTER_VEL = (1000 / 60) / STEP_MS;
+
 function leaveRail(body, frame) {
   body.railT = clamp(body.railT, RAIL_TOP, RAIL_END);
   const p = railRidePoint(body.railT);
@@ -491,7 +496,10 @@ function leaveRail(body, frame) {
   const ny = ELL.y - p.y;
   const n = Math.hypot(nx, ny);
   Body.setPosition(body, { x: p.x + nx / n, y: p.y + ny / n });
-  Body.setVelocity(body, { x: frame.tx * body.railV, y: frame.ty * body.railV });
+  Body.setVelocity(body, {
+    x: frame.tx * body.railV * TO_MATTER_VEL,
+    y: frame.ty * body.railV * TO_MATTER_VEL
+  });
   body.railT = null;
   body.collisionFilter.mask = PLAY_FILTER.mask;
 }
@@ -543,7 +551,10 @@ function rideRail(body) {
 
   const p = railRidePoint(body.railT);
   Body.setPosition(body, p);
-  Body.setVelocity(body, { x: frame.tx * body.railV, y: frame.ty * body.railV });
+  Body.setVelocity(body, {
+    x: frame.tx * body.railV * TO_MATTER_VEL,
+    y: frame.ty * body.railV * TO_MATTER_VEL
+  });
 }
 
 function launch(power) {
