@@ -40,7 +40,7 @@ const RAIL_T = 10;                           // drawn thickness
 // (a 15 degree hit came out at 0 degrees). At 20 both stop: nothing passes
 // below 31 px/step and every bounce angle is correct. 24 and 28 measured
 // identical to 20, so 20 is the whole of the fix. Our fastest ball is 26.5.
-const RAIL_HIT = 20;
+const RAIL_HIT = 30;
 const RAIL_CLEAR = 28;                       // channel width
 const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // semi-axis gain per turn
 const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
@@ -48,6 +48,11 @@ const RAIL_LIFT = 60;                        // deg, 12 o'clock to 10 o'clock
 const LIFT_FROM = 300;                       // deg, 12 o'clock: leaves the base ellipse
 const LIFT_TO = 360;                         // deg, 10 o'clock: channel fully open
 const MOUTH_TO = 480;                        // deg, 6 o'clock: mouth drop complete
+// The inner winding is drawn in a little over the lower left, 10 o'clock round
+// to 6. A sine squared bump, so it is flat where it meets the rest of the
+// boundary at both ends and leaves no corner behind.
+const INNER_DIP = 10;                        // px, at its deepest
+const DIP_TO = 120;                          // deg of sweep, 10 o'clock to 6
 const RAIL_STEP = 2;                         // deg per segment
 const MOUTH_DROP = 25;                       // extra lift by 6 o'clock, outer winding only
 const MOUTH_FROM = 390;                      // deg of sweep where that drop eases in
@@ -242,7 +247,10 @@ function slab(x, y, w, h, angle = 0, grip = {}) {
 // the outer winding ever reaches that last stretch, so the line carrying the
 // hole stays put while the channel floor drops away under it.
 function railLift(t) {
-  if (t <= LIFT_FROM) return 0;
+  if (t <= LIFT_FROM) {
+    if (t > DIP_TO) return 0;
+    return -INNER_DIP * Math.sin((Math.PI * t) / DIP_TO) ** 2;
+  }
   if (t <= LIFT_TO) {
     // Smoothstep, not a straight ramp: a linear one leaves a corner in the
     // curve at both ends of the lift, which the ride feels as a kick.
