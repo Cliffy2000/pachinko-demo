@@ -4,6 +4,7 @@
 import { BONUS, FX, KNOBS } from './config.js';
 import { paintField } from './field.js';
 import { shake } from './fx.js';
+import { playRumble } from './audio.js';
 
 export const bonus = { mode: null, left: 0, stocked: 0, nextShake: 0 };
 
@@ -29,6 +30,7 @@ export function updateBonus(dt) {
 
   if (bonus.mode === 'big' && (bonus.nextShake -= dt) <= 0) {
     shake(FX.bonusShake.px, FX.bonusShake.s);
+    playRumble();
     bonus.nextShake = between(BONUS.shakeEveryS);
   }
   if ((bonus.left -= dt) > 0) return null;

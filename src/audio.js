@@ -67,8 +67,8 @@ function tone({ freq, to = freq, type = 'sine', gain, attack = 0.002, decay, at 
   track(osc, counted);
 }
 
-// A burst of filtered white noise.
-function noise({ gain, decay, filter = 'bandpass', freq = 3000, q = 1, at = 0, counted = true }) {
+// A burst of filtered white noise; the filter can sweep from freq to `to`.
+function noise({ gain, decay, filter = 'bandpass', freq = 3000, to = freq, q = 1, attack = 0, at = 0, counted = true }) {
   const t = ctx.currentTime + at;
   const src = ctx.createBufferSource();
   const band = ctx.createBiquadFilter();
@@ -76,14 +76,16 @@ function noise({ gain, decay, filter = 'bandpass', freq = 3000, q = 1, at = 0, c
 
   src.buffer = noiseBuffer;
   band.type = filter;
-  band.frequency.value = freq;
+  band.frequency.setValueAtTime(freq, t);
+  if (to !== freq) band.frequency.exponentialRampToValueAtTime(to, t + attack + decay);
   band.Q.value = q;
-  env.gain.setValueAtTime(gain, t);
-  env.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  env.gain.setValueAtTime(attack ? 0.0001 : gain, t);
+  if (attack) env.gain.exponentialRampToValueAtTime(gain, t + attack);
+  env.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
 
   src.connect(band).connect(env).connect(master);
   src.start(t, Math.random() * 0.4);
-  src.stop(t + decay + 0.02);
+  src.stop(t + attack + decay + 0.02);
   track(src, counted);
 }
 
@@ -150,6 +152,33 @@ export function playBonus(mode) {
     tone({ freq, type: mode === 'big' ? 'triangle' : 'square', gain: mode === 'big' ? 0.16 : 0.07, decay: 0.35, at: i * 0.07, counted: false })
   );
   if (mode === 'big') playCoins('big', 0.25);
+}
+
+// The roulette ball clicking over a pocket divider.
+export function playTick() {
+  if (!allowed('tick', 0.012)) return;
+  noise({ gain: 0.05, decay: 0.012, freq: 4200 * jitter(0.1), q: 5 });
+  tone({ freq: 2900 * jitter(0.05), gain: 0.025, decay: 0.012 });
+}
+
+// The ball dropping into its pocket.
+export function playLand() {
+  if (!allowed('land', 0.05)) return;
+  noise({ gain: 0.1, decay: 0.03, freq: 1800, q: 3 });
+  tone({ freq: 880, to: 660, type: 'triangle', gain: 0.08, decay: 0.06 });
+}
+
+// A low rumble under a screen shake; heavier for the big one.
+export function playRumble(heavy = false) {
+  if (!allowed('rumble', 0.1)) return;
+  noise({ gain: heavy ? 0.35 : 0.2, decay: heavy ? 0.6 : 0.35, filter: 'lowpass', freq: 160, counted: false });
+  tone({ freq: heavy ? 70 : 60, to: 35, gain: heavy ? 0.3 : 0.18, decay: heavy ? 0.6 : 0.35, counted: false });
+}
+
+// A rising sweep as a banner pops in.
+export function playWhoosh() {
+  if (!allowed('whoosh', 0.2)) return;
+  noise({ gain: 0.12, attack: 0.12, decay: 0.15, freq: 500, to: 5000, q: 1.5, counted: false });
 }
 
 export function playLaunch() {

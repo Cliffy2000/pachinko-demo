@@ -9,7 +9,7 @@ import { STEP_S } from './world.js';
 import { reward } from './deck.js';
 import { isBig, startBonus, updateBonus } from './bonus.js';
 import { banner, fireworks, flashLights, shake } from './fx.js';
-import { playBonus, playCoins, playSlotHit } from './audio.js';
+import { playBonus, playCoins, playLand, playRumble, playSlotHit, playTick, playWhoosh } from './audio.js';
 import { stats } from './state.js';
 
 const TAU = Math.PI * 2;
@@ -105,9 +105,14 @@ function wheelAngle(spin, t) {
 
 // The ball rolls round the outer track, then drops onto the pocket ring over
 // the second half of the spin.
+const ballAngle = (spin, t) => spin.ballFrom + spin.travel * easeOut(Math.min(1, t / DRAW.spinS));
+
+// Which divider gap the ball is over, counted round the wheel; a change is a click.
+const pocketUnder = (spin, t) => Math.floor((ballAngle(spin, t) - wheelAngle(spin, t)) / POCKET_ANGLE);
+
 function ballPose(spin, t) {
   const u = Math.min(1, t / DRAW.spinS);
-  const angle = spin.ballFrom + spin.travel * easeOut(u);
+  const angle = ballAngle(spin, t);
   const drop = Math.min(1, Math.max(0, (u - 0.55) / 0.35));
   const r = DRAW.track + (DRAW.r - DRAW.track) * drop * drop * (3 - 2 * drop);
   return { x: DRAW.x + Math.cos(angle) * r, y: DRAW.y + Math.sin(angle) * r };
@@ -125,7 +130,10 @@ export function spinPose() {
 const BONUS_COLOURS = { small: [PALETTE.bonusA, PALETTE.bonusB], big: [PALETTE.gold] };
 const BANNER_COLOURS = { large: [PALETTE.gold, PALETTE.cup], smallBonus: [PALETTE.bonusA, PALETTE.bonusB], bigBonus: [PALETTE.gold, PALETTE.cup] };
 
-const showBanner = (outcome) => banner(...outcome.banner, ...BANNER_COLOURS[outcome.name]);
+function showBanner(outcome) {
+  banner(...outcome.banner, ...BANNER_COLOURS[outcome.name]);
+  playWhoosh();
+}
 
 function celebrateBonus(mode) {
   playBonus(mode);
@@ -134,6 +142,7 @@ function celebrateBonus(mode) {
     return;
   }
   shake(FX.shake.px, FX.shake.s);
+  playRumble(true);
   fireworks(AT_WHEEL, 'large');
   [0.25, 0.5, 0.75].forEach((f, i) =>
     fireworks({ x: DRAW.x + (f - 0.5) * 420, y: DRAW.y - 300 }, 'large', [PALETTE.gold], 0.3 + i * 0.25)
@@ -165,9 +174,12 @@ function settle(outcome) {
 function updateSpin() {
   const { spin } = draw;
   if (spin) {
+    const was = pocketUnder(spin, spin.t);
     spin.t += STEP_S;
+    if (!spin.landed && pocketUnder(spin, spin.t) !== was) playTick();
     if (!spin.landed && spin.t >= DRAW.spinS) {
       spin.landed = true;
+      playLand();
       draw.wheel = wheelAngle(spin, DRAW.spinS) % TAU;
       settle(spin.outcome);
     }
