@@ -32,7 +32,11 @@ export const PALETTE = {
   pivot: '#8296ad',
   pin: '#8296ad',
   cup: '#e0574a',
-  jackpot: '#ffd166'
+  jackpot: '#ffd166',
+  coin: '#f5c542',
+  coinEdge: '#b8860b',
+  cash: '#3fae5a',
+  cashDark: '#25703a'
 };
 
 /* ---- rail -------------------------------------------------------------- */
@@ -82,20 +86,24 @@ export const LAUNCH = {
 
 /* ---- pins -------------------------------------------------------------- */
 
-// Laid out after the classic nail groups. Points are [dx from the centre line,
-// y from the window top] for the right half; each is mirrored to the left.
+// Arched rows under the top of the rail, even staggered rows through the
+// middle, and small gates round the knobs and the cup. Points are [dx from the
+// centre line, y from the window top]; any dx other than 0 is mirrored.
 export const PINS = {
   r: 4,
   railClear: 20, // pins closer than this to the rail are dropped
   layout: {
-    sky: [[0, 110], [35, 114], [70, 126]], // spread balls arriving over the top
-    road: [[205, 215], [170, 245], [135, 275], [100, 305], [70, 332]], // lead in towards the cup
-    windmill: [[155, 350], [185, 350], [170, 372]], // where a windmill would sit
-    armour: [[232, 300], [236, 318], [240, 336], [244, 354]], // close-set: a wall down the side lane
-    sleeve: [[230, 420], [205, 460]], // knock balls out of the side lane
-    life: [[13, 398]], // flank the cup mouth
-    lower: [[110, 480], [160, 458]], // scatter the middle before the drain
-    guard: [[30, 540]] // over the drain
+    arch: [[0, 90], [60, 96], [120, 114]],
+    innerArch: [[30, 155], [90, 165], [150, 185], [205, 215]],
+    row: [[30, 240], [90, 240], [150, 240], [210, 240]],
+    staggered: [[0, 300], [60, 300], [120, 300], [180, 300]],
+    split: [[60, 360]], // sends traffic towards either the cup or a knob
+    cupGuard: [[0, 397]], // on the centre line, 60 px above the cup rim
+    knobGate: [[138, 360], [208, 360]],
+    wall: [[225, 420]],
+    cupWing: [[50, 445]],
+    lower: [[100, 500], [160, 500]],
+    drain: [[70, 555]]
   }
 };
 
@@ -103,7 +111,7 @@ export const PINS = {
 
 export const JACKPOT = {
   x: WINDOW.x + WINDOW.w / 2,
-  y: WINDOW.y + 420, // rim of the cup
+  y: WINDOW.y + 457, // rim of the cup
   mouth: 26 * 1.6, // inner width
   depth: 22, // inside, rim to floor
   wall: 5,
@@ -113,7 +121,18 @@ export const JACKPOT = {
   shakeS: 0.6,
   shakePx: 8,
   showS: 2.4, // banner and lights
-  sparks: 40
+  sparks: 60,
+  coins: 30
+};
+
+/* ---- cash knobs -------------------------------------------------------- */
+
+export const KNOBS = {
+  r: 8,
+  dx: 173, // either side of the centre line
+  y: WINDOW.y + 393,
+  cash: 10, // per hit
+  bills: 8 // per hit
 };
 
 /* ---- deck -------------------------------------------------------------- */

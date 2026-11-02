@@ -13,7 +13,7 @@ engine.velocityIterations = PHYSICS.velocityIterations;
 export const STEP_S = 1 / PHYSICS.hz;
 export const GRAVITY = engine.gravity.y * engine.gravity.scale * 1e6; // px/s²
 
-export const KIND = { PLAY: 'play', BOX: 'box', SPILL: 'spill', PIN: 'pin' };
+export const KIND = { PLAY: 'play', BOX: 'box', SPILL: 'spill', PIN: 'pin', KNOB: 'knob' };
 
 // Field and deck never touch: refills fall through the playfield.
 const CAT = { FIELD: 0x1, DECK: 0x2, PLAY: 0x4, STOCK: 0x8 };
@@ -40,9 +40,9 @@ const BALL_SPEC = {
   [KIND.SPILL]: { sides: 10, restitution: 0.45, friction: 0.02, frictionAir: 0.001, filter: FILTER.ghost }
 };
 
-export function pin(x, y, r) {
+export function pin(x, y, r, kind = KIND.PIN) {
   return Bodies.circle(x, y, r, {
-    label: KIND.PIN,
+    label: kind,
     isStatic: true,
     ...SURFACE.pin,
     collisionFilter: FILTER.field,

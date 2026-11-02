@@ -1,12 +1,12 @@
 // Per-step behaviour for every dynamic body, dispatched by kind. A new kind of
 // body gets its own entry in UPDATE.
 
-import { CANVAS, DECK_TOP, JACKPOT } from './config.js';
+import { CANVAS, DECK_TOP, JACKPOT, KNOBS } from './config.js';
 import { KIND, allBodies, engine, remove } from './world.js';
 import { isInJackpot, isOverDrain } from './field.js';
 import { isRiding, updateRide } from './launch.js';
 import { reward, updateBoxBall } from './deck.js';
-import { celebrate } from './fx.js';
+import { celebrate, throwCash } from './fx.js';
 import { counts, queue, stats } from './state.js';
 
 const { Events } = Matter;
@@ -56,6 +56,16 @@ function updateBodies() {
   }
 }
 
+function payKnobHits({ pairs }) {
+  for (const { bodyA, bodyB } of pairs) {
+    const knob = bodyA.label === KIND.KNOB ? bodyA : bodyB.label === KIND.KNOB ? bodyB : null;
+    if (!knob) continue;
+    stats.cash += KNOBS.cash;
+    throwCash(knob.position);
+  }
+}
+
 export function startRules() {
   Events.on(engine, 'afterUpdate', updateBodies);
+  Events.on(engine, 'collisionStart', payKnobHits);
 }

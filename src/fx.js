@@ -1,21 +1,48 @@
-// Jackpot celebration: canvas shake, chasing lights round the window, sparks
-// from the cup and a banner. Runs on wall-clock time, not physics steps.
+// Effects: the jackpot celebration (canvas shake, chasing lights round the
+// window, sparks from the cup, a banner) and bills thrown from cash knobs.
+// Runs on wall-clock time, not physics steps.
 
-import { JACKPOT, PALETTE, WINDOW } from './config.js';
+import { JACKPOT, KNOBS, PALETTE, WINDOW } from './config.js';
 
 const LIGHT_GAP = 30;
 const SPARK_GRAVITY = 900; // px/s²
+const BILL = { w: 9, h: 5, gravity: 260, drag: 2.5 }; // light paper: slow fall, high drag
 
 let startedAt = -Infinity;
 let lastDraw = null;
 let sparks = [];
+let bills = [];
 
+const between = (lo, hi) => lo + Math.random() * (hi - lo);
+
+// Flares and gold coins burst over the upper half; coins are slower and live longer.
 export function celebrate({ x, y }) {
   startedAt = performance.now();
-  for (let i = 0; i < JACKPOT.sparks; i++) {
-    const a = -Math.PI * Math.random(); // upper half
-    const speed = 200 + Math.random() * 350;
-    sparks.push({ x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, life: 0.6 + Math.random() * 0.6 });
+  const burst = (n, speed, life, extra) => {
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI * Math.random();
+      const v = between(...speed);
+      sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: between(...life), ...extra() });
+    }
+  };
+  burst(JACKPOT.sparks, [300, 800], [0.9, 1.8], () => ({ size: between(4, 7) }));
+  burst(JACKPOT.coins, [250, 600], [1.4, 2.2], () => ({ coin: between(4, 6), phase: Math.random() * Math.PI * 2 }));
+}
+
+export function throwCash({ x, y }) {
+  for (let i = 0; i < KNOBS.bills; i++) {
+    const a = between(-Math.PI * 0.85, -Math.PI * 0.15);
+    const speed = between(120, 260);
+    bills.push({
+      x,
+      y,
+      vx: Math.cos(a) * speed,
+      vy: Math.sin(a) * speed,
+      angle: Math.random() * Math.PI,
+      spin: between(-10, 10),
+      phase: Math.random() * Math.PI * 2,
+      life: between(0.7, 1.1)
+    });
   }
 }
 
@@ -61,9 +88,52 @@ function drawSparks(ctx, dt) {
     s.x += s.vx * dt;
     s.y += s.vy * dt;
     ctx.globalAlpha = Math.min(1, s.life * 2);
-    ctx.fillRect(s.x - 2, s.y - 2, 4, 4);
+    if (s.coin) drawCoin(ctx, s, dt);
+    else ctx.fillRect(s.x - s.size / 2, s.y - s.size / 2, s.size, s.size);
   }
   ctx.globalAlpha = 1;
+}
+
+// A coin seen flipping end over end: its width follows cos of the flip.
+function drawCoin(ctx, s, dt) {
+  s.phase += dt * 14;
+  ctx.save();
+  ctx.translate(s.x, s.y);
+  ctx.scale(Math.max(0.15, Math.abs(Math.cos(s.phase))), 1);
+  ctx.beginPath();
+  ctx.arc(0, 0, s.coin, 0, Math.PI * 2);
+  ctx.fillStyle = PALETTE.coin;
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = PALETTE.coinEdge;
+  ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = PALETTE.jackpot;
+}
+
+// Each bill tumbles and sways side to side as it falls.
+function drawBills(ctx, dt) {
+  bills = bills.filter((b) => (b.life -= dt) > 0);
+  for (const b of bills) {
+    const damp = Math.exp(-BILL.drag * dt);
+    b.vx *= damp;
+    b.vy = b.vy * damp + BILL.gravity * dt;
+    b.phase += dt * 9;
+    b.x += (b.vx + Math.sin(b.phase) * 40) * dt;
+    b.y += b.vy * dt;
+    b.angle += b.spin * dt;
+
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, b.life * 3);
+    ctx.translate(b.x, b.y);
+    ctx.rotate(b.angle);
+    ctx.scale(1, Math.cos(b.phase)); // flips edge-on as it tumbles
+    ctx.fillStyle = PALETTE.cash;
+    ctx.fillRect(-BILL.w / 2, -BILL.h / 2, BILL.w, BILL.h);
+    ctx.fillStyle = PALETTE.cashDark;
+    ctx.fillRect(-1.5, -BILL.h / 2, 3, BILL.h);
+    ctx.restore();
+  }
 }
 
 function drawBanner(ctx, t) {
@@ -95,6 +165,7 @@ export function drawEffects(ctx, canvas) {
   ctx.save();
   shake(canvas, t);
   if (sparks.length) drawSparks(ctx, dt);
+  if (bills.length) drawBills(ctx, dt);
   if (t < JACKPOT.showS) {
     drawLights(ctx, t);
     drawBanner(ctx, t);

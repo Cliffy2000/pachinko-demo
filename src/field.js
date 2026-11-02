@@ -1,8 +1,8 @@
-// The playfield: the rail, the drain, the pins and the jackpot cup.
+// The playfield: the rail, the drain, the pins, the jackpot cup and the cash knobs.
 
-import { BALL, DEBUG, DRAIN, ELLIPSE, JACKPOT, PALETTE, PINS, RAIL, WINDOW } from './config.js';
+import { BALL, DEBUG, DRAIN, ELLIPSE, JACKPOT, KNOBS, PALETTE, PINS, RAIL, WINDOW } from './config.js';
 import { outward, rad, railPoint } from './geometry.js';
-import { FILTER, SURFACE, add, pin, wall } from './world.js';
+import { FILTER, KIND, SURFACE, add, pin, wall } from './world.js';
 
 // The drain is at the bottom, where the rail's radius is the ellipse's b.
 const drainT = (((DRAIN.bearing - RAIL.head) % 360) + 360) % 360;
@@ -57,14 +57,25 @@ function insideField(x, y, clear) {
   return u * u + v * v <= 1;
 }
 
+const KNOB_SPOTS = [-KNOBS.dx, KNOBS.dx].map((dx) => ({ x: ELLIPSE.x + dx, y: KNOBS.y }));
+
 function pinLayout() {
   const clear = PINS.railClear + BALL.r * 2 + PINS.r + RAIL.thickness / 2;
-  const points = Object.values(PINS.layout)
+
+  return Object.values(PINS.layout)
     .flat()
     .flatMap(([dx, dy]) => (dx === 0 ? [[0, dy]] : [[dx, dy], [-dx, dy]]))
-    .map(([dx, dy]) => ({ x: ELLIPSE.x + dx, y: WINDOW.y + dy }));
+    .map(([dx, dy]) => ({ x: ELLIPSE.x + dx, y: WINDOW.y + dy }))
+    .filter((p) => insideField(p.x, p.y, clear))
+    .map((p) => pin(p.x, p.y, PINS.r));
+}
 
-  return points.filter((p) => insideField(p.x, p.y, clear)).map((p) => pin(p.x, p.y, PINS.r));
+function knobs() {
+  return KNOB_SPOTS.map((k) => {
+    const knob = pin(k.x, k.y, KNOBS.r, KIND.KNOB);
+    knob.render.fillStyle = PALETTE.cash;
+    return knob;
+  });
 }
 
 // Sealed sides and floor, open only at the top. A ball whose centre drops
@@ -92,5 +103,5 @@ function cup() {
 }
 
 export function buildField() {
-  add(railSlabs(), pinLayout(), cup());
+  add(railSlabs(), pinLayout(), cup(), knobs());
 }
