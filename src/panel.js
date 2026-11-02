@@ -1,6 +1,7 @@
 // The side panel: readout, power gauge and buttons.
 
 import { counts, stats } from './state.js';
+import { canBuy } from './deck.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -15,6 +16,7 @@ const out = {
 const power = $('power');
 const autoButton = $('auto-fire');
 const sourceButton = $('launch-from');
+const buyButtons = [...document.querySelectorAll('[data-buy]')];
 
 export function updatePanel() {
   out.box.textContent = counts.box;
@@ -23,6 +25,7 @@ export function updatePanel() {
   out.spilled.textContent = stats.spilled;
   out.jackpots.textContent = stats.jackpots;
   out.cash.textContent = stats.cash;
+  for (const b of buyButtons) b.disabled = !canBuy(Number(b.dataset.buy));
 }
 
 export function showPower(pull) {
@@ -40,9 +43,8 @@ export function showSource(fromOverflow) {
   sourceButton.textContent = fromOverflow ? 'Launch from: overflow' : 'Launch from: box';
 }
 
-export function bindButtons({ onFill, onPayout, onAuto, onSource }) {
-  $('add-balls').addEventListener('click', onFill);
-  $('payout').addEventListener('click', onPayout);
+export function bindButtons({ onBuy, onAuto, onSource }) {
+  for (const b of buyButtons) b.addEventListener('click', () => onBuy(Number(b.dataset.buy)));
   autoButton.addEventListener('click', onAuto);
   sourceButton.addEventListener('click', onSource);
 }

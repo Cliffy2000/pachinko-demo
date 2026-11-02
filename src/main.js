@@ -2,7 +2,7 @@ import { LAUNCH, PHYSICS } from './config.js';
 import { clamp } from './geometry.js';
 import { engine } from './world.js';
 import { buildField } from './field.js';
-import { buildDeck, dispense, dispenseHz, fillBox, payout } from './deck.js';
+import { buildDeck, buy, dispense, dispenseHz } from './deck.js';
 import { launch } from './launch.js';
 import { startRules } from './rules.js';
 import { canvas, drawFrame, rememberPoses } from './view.js';
@@ -24,8 +24,7 @@ const autoPower = () => clamp(readPower() + (Math.random() * 2 - 1) * LAUNCH.aut
 
 bindLever(canvas, { onPull: showPower, onRelease: fire });
 bindButtons({
-  onFill: fillBox,
-  onPayout: () => payout(),
+  onBuy: buy,
   onAuto: () => showAuto((autoFire = !autoFire)),
   onSource: () => showSource((fromOverflow = !fromOverflow))
 });

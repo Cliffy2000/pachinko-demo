@@ -41,6 +41,7 @@ canvas {
 
 .panel {
   width: 200px;
+  user-select: none;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -71,10 +72,7 @@ canvas {
 
 #power { width: 100%; accent-color: var(--accent); }
 
-#add-balls,
-#payout,
-#auto-fire,
-#launch-from {
+.panel button {
   padding: 14px;
   font: inherit;
   font-weight: 600;
@@ -87,12 +85,20 @@ canvas {
   user-select: none;
 }
 
-#add-balls:active,
-#payout:active,
-#auto-fire:active,
-#launch-from:active { filter: brightness(0.85); }
+.panel button:active { filter: brightness(0.85); }
 
 #auto-fire[aria-pressed="false"] { background: var(--edge); }
+
+.panel button:disabled {
+  background: var(--edge);
+  color: var(--muted);
+  cursor: default;
+}
+
+.buy { display: flex; gap: 10px; }
+.buy button { flex: 1; }
+
+#launch-from { height: calc(3em + 28px); } /* two lines of text plus padding, so wrapping does not resize it */
 
 .hint { margin: 0; font-size: 12px; color: var(--muted); }
 

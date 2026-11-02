@@ -1,8 +1,8 @@
 // The box below the window that holds every ball outside the field.
 
-import { BALL, DECK, DECK_TOP, PHYSICS } from './config.js';
+import { BALL, DECK, DECK_TOP, ECONOMY, PHYSICS } from './config.js';
 import { FILTER, KIND, SURFACE, add, ball, ballsOf, isClear, remove, setVelocity, wake, wall } from './world.js';
-import { counts, queue } from './state.js';
+import { queue, stats } from './state.js';
 
 const { box, plate } = DECK;
 
@@ -49,11 +49,11 @@ export function dispense() {
 
 export const dispenseHz = () => DECK.dispenseHz * (queue.reward > 0 ? DECK.rewardSpeedup : 1);
 
-export function fillBox() {
-  queue.box = Math.max(queue.box, DECK.capacity - counts.box);
-}
+export const canBuy = (n) => stats.cash >= n * ECONOMY.ballCost;
 
-export function payout(n = DECK.payout) {
+export function buy(n) {
+  if (!canBuy(n)) return;
+  stats.cash -= n * ECONOMY.ballCost;
   queue.box += n;
 }
 

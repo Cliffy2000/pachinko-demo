@@ -119,7 +119,7 @@ export const JACKPOT = {
   reward: 100,
 
   shakeS: 0.6,
-  shakePx: 8,
+  shakePx: 11,
   showS: 2.4, // banner and lights
   sparks: 60,
   coins: 30
@@ -131,7 +131,7 @@ export const KNOBS = {
   r: 8,
   dx: 173, // either side of the centre line
   y: WINDOW.y + 393,
-  cash: 10, // per hit
+  cash: 50, // per hit
   bills: 8 // per hit
 };
 
@@ -150,13 +150,18 @@ export const DECK = {
   fullAbove: 2, // balls stacked above the rim before the box overflows
   box: { x: BOX_CORNER.x - BOX_W, y: BOX_CORNER.y - BOX_DROP - BOX_DEPTH, w: BOX_W, h: BOX_DEPTH },
   boxDrop: BOX_DROP,
-  capacity: 200, // what Fill tops the box up to
   dropHeight: 210, // refills fall from behind the window
   spillDelay: 0.14, // a ball resting above the rim falls out the front after this
 
-  payout: 50,
   dispenseHz: 60,
   rewardSpeedup: 1.25 // dispenser runs this much faster while a jackpot pays out
+};
+
+/* ---- economy ----------------------------------------------------------- */
+
+export const ECONOMY = {
+  startCash: 1000,
+  ballCost: 4
 };
 
 /* ---- lever ------------------------------------------------------------- */
