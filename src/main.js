@@ -13,7 +13,7 @@ const WIDTH = BOX + MARGIN * 2;
 const HEIGHT = CONTENT_H + MARGIN * 2;
 const OX = MARGIN;                           // top left of the glass window
 const OY = MARGIN;
-const BOX_LIFT = 50;                         // the window bottom, raised across the rail
+const BOX_LIFT = 55;                         // the window bottom, raised across the rail
 const BOX_H = BOX - BOX_LIFT;
 const DECK_TOP = OY + BOX_H;                 // glass above, deck below
 
@@ -44,8 +44,8 @@ const RAIL_STEP = 2;                         // deg per segment
 // Base ellipse. The three numbers to tune: width, height, and how far its
 // centre sits above the window's own centre.
 const ELL_A = BOX / 2 - RAIL_PITCH - RAIL_T / 2;   // 242, outer winding flush left
-const ELL_B = 268.5;
-const ELL_RISE = 18.5;
+const ELL_B = 281;
+const ELL_RISE = 6;
 const ELL = { x: CX, y: CY - ELL_RISE };
 
 const CHANNEL_L = RAIL_T / 2 + RAIL_CLEAR / 2;     // lift at the middle of the channel
@@ -58,9 +58,16 @@ const DRAIN_DEG = -90;
 const DRAIN_SPAN = 17.4;                     // deg, about 73px of rail
 const DRAIN_T = ((DRAIN_DEG - RAIL_HEAD) % 360 + 360) % 360;
 
-// A flat line below the window, so a ball keeps falling through the hole in
-// view instead of vanishing the instant it reaches the rail.
-const DRAIN_Y = DECK_TOP + BALL_R;
+// A box rather than a line, hung under the window across the hole. 30 tall is
+// more than the fastest ball covers in a step, so nothing gets through it, and
+// being bounded means the launch area below the channel stays clear of it.
+const DRAIN_H = 30;
+const DRAIN_BOX = {
+  x1: ELL.x - (ELL_A * DRAIN_SPAN * Math.PI / 180) / 2 - BALL_R,
+  x2: ELL.x + (ELL_A * DRAIN_SPAN * Math.PI / 180) / 2 + BALL_R,
+  y1: DECK_TOP,
+  y2: DECK_TOP + DRAIN_H
+};
 
 // What stops a ball tunnelling is not the wall thickness but the catch window,
 // 2 * (RAIL_T / 2 + BALL_R) = 26.8px: a ball is caught as long as it travels
@@ -447,8 +454,7 @@ Events.on(engine, 'afterUpdate', () => {
     }
 
     if (body.label === 'play') {
-      // A flat line below the window, so the ball stays visible on its way out.
-      if (y > DRAIN_Y) {
+      if (x > DRAIN_BOX.x1 && x < DRAIN_BOX.x2 && y > DRAIN_BOX.y1 && y < DRAIN_BOX.y2) {
         Composite.remove(engine.world, body);
         state.drained += 1;
         continue;
