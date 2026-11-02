@@ -104,7 +104,7 @@ canvas {
   text-align: center;
 }
 
-.brand-hide-cursor { cursor: none; }
+.brand-hide-cursor { cursor: none; user-select: none; }
 
 @media (max-width: 720px) {
   .panel { width: 100%; max-width: 450px; }

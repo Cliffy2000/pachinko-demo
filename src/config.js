@@ -116,7 +116,7 @@ export const JACKPOT = {
 const BOX_W = 378;
 const BOX_DROP = BOX_W * (30 / 190); // the old tray's slope
 const BOX_DEPTH = 29;
-const BOX_CORNER = { x: WINDOW.x + WINDOW.w / 2 + 106, y: MARGIN + 827 };
+const BOX_CORNER = { x: WINDOW.x + WINDOW.w / 2 + 81, y: MARGIN + 827 };
 
 export const DECK = {
   plate: 8,
@@ -133,12 +133,9 @@ export const DECK = {
 
 /* ---- lever ------------------------------------------------------------- */
 
-// Pivot level with the box rim, moved up-left at 45° from beside the middle of
-// its right wall.
-const LEVER_SHIFT = (DECK.box.h + DECK.boxDrop) / 2;
-
+// Pivot level with the box rim, right of the box's right wall.
 export const LEVER = {
-  x: DECK.box.x + DECK.box.w + DECK.plate + 30 - LEVER_SHIFT,
+  x: DECK.box.x + DECK.box.w + DECK.plate + 130 - (DECK.box.h + DECK.boxDrop) / 2,
   y: DECK.box.y,
   length: 108,
   travel: 40, // degrees at full pull
