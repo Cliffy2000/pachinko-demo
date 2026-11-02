@@ -305,7 +305,7 @@ Composite.add(engine.world, [
 // 24 so they ride the channel cleanly. circleRadius keeps them drawn round.
 function ball(x, y, label) {
   const grip = GRIP[label] || PLAY_GRIP;
-  return Bodies.polygon(x, y, label === 'play' ? 24 : 10, BALL_R, {
+  return Bodies.polygon(x, y, label === 'play' ? 48 : 10, BALL_R, {
     label,
     circleRadius: BALL_R,
     // Matter takes the HIGHER restitution of a pair, so the rail cannot damp a
