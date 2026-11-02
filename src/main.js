@@ -66,9 +66,7 @@ const PANEL_LEN = 100;
 // with it any argument about friction.
 const RAIL_TOP = 300;                        // deg of sweep where the rail ends, 12 o'clock
 const RAIL_DRAG = 0.0003;                    // speed lost per step on the rail
-// Gravity only bites above this point on the sweep. Below it the launch is
-// treated as carrying the ball, the way a short real launch rail would.
-const RAIL_GRAVITY_FROM = 390;               // deg of sweep, 9 o'clock
+const RAIL_FREE_AT = 360;                    // deg of sweep, 10 o'clock: the channel opens
 
 // Hole in the rail at the bottom, where the curve is tangent to the window.
 const DRAIN_DEG = -90;
@@ -91,8 +89,8 @@ const DRAIN_BOX = {
 // less than that in a step. The fastest perpendicular impact is about 18, so
 // there is 1.5x in hand. MAX_POWER itself is 25, but that is tangent to the
 // channel at launch, never into a wall.
-const MIN_POWER = 11;                        // px/step, just short of the top
-const MAX_POWER = 18;                        // px/step
+const MIN_POWER = 16;                        // px/step, just short of the top
+const MAX_POWER = 23;                        // px/step
 
 /* ---- deck -------------------------------------------------------------- */
 
@@ -483,20 +481,51 @@ function catchRail(body) {
 function leaveRail(body, frame) {
   body.railT = clamp(body.railT, RAIL_TOP, RAIL_SWEEP);
   const p = railRidePoint(body.railT);
-  Body.setPosition(body, p);
+
+  // Nudge a pixel off the wall so the ball is not already touching it when
+  // collisions come back on.
+  const nx = ELL.x - p.x;
+  const ny = ELL.y - p.y;
+  const n = Math.hypot(nx, ny);
+  Body.setPosition(body, { x: p.x + nx / n, y: p.y + ny / n });
   Body.setVelocity(body, { x: frame.tx * body.railV, y: frame.ty * body.railV });
   body.railT = null;
   body.collisionFilter.mask = PLAY_FILTER.mask;
 }
 
+// Radius of curvature of the ride path, as the circumradius of three points.
+function railRadius(t) {
+  const a = railRidePoint(t - 1);
+  const b = railRidePoint(t);
+  const c = railRidePoint(t + 1);
+  const area = Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) / 2;
+  const sides =
+    Math.hypot(b.x - a.x, b.y - a.y) *
+    Math.hypot(c.x - b.x, c.y - b.y) *
+    Math.hypot(a.x - c.x, a.y - c.y);
+  return sides / (4 * area);
+}
+
+// A wall can push but never pull. Below the centre of the curve the inward
+// direction has no downward component, so the wall is always working against
+// gravity and the ball cannot come off: that is 6 o'clock round to 9. Above it,
+// gravity bends the ball inward by itself, and the moment it bends harder than
+// the rail does the ball leaves. No rule needed, it falls out of the geometry.
+function railHolds(t, v) {
+  const p = railRidePoint(t);
+  const down = (ELL.y - p.y) / Math.hypot(ELL.x - p.x, ELL.y - p.y);
+  if (down <= 0) return true;
+  return (v * v) / railRadius(t) >= G_STEP * down;
+}
+
 // One step of the one dimensional ride: gravity along the rail, then advance.
 function rideRail(body) {
   const frame = railFrame(body.railT);
-  const pull = body.railT <= RAIL_GRAVITY_FROM ? G_STEP * frame.ty : 0;
-  body.railV = (body.railV + pull) * (1 - RAIL_DRAG);
+  body.railV = (body.railV + G_STEP * frame.ty) * (1 - RAIL_DRAG);
   body.railT -= body.railV / frame.perDeg;
 
-  if (body.railT <= RAIL_TOP || body.railT >= RAIL_SWEEP) {
+  const freed = body.railT < RAIL_FREE_AT && !railHolds(body.railT, body.railV);
+  if (freed || body.railT <= RAIL_TOP || body.railT >= RAIL_SWEEP) {
     leaveRail(body, frame);
     return;
   }
