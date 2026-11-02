@@ -116,7 +116,7 @@ export const JACKPOT = {
   depth: 22, // inside, rim to floor
   wall: 5,
   floor: 9,
-  reward: 100,
+  reward: 250, // balls
 
   shakeS: 0.6,
   shakePx: 11,
@@ -160,7 +160,7 @@ export const DECK = {
 /* ---- economy ----------------------------------------------------------- */
 
 export const ECONOMY = {
-  startCash: 1000,
+  startCash: 2500,
   ballCost: 4
 };
 

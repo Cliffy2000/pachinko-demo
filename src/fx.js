@@ -2,7 +2,7 @@
 // window, sparks from the cup, a banner) and bills thrown from cash knobs.
 // Runs on wall-clock time, not physics steps.
 
-import { JACKPOT, KNOBS, PALETTE, WINDOW } from './config.js';
+import { ECONOMY, JACKPOT, KNOBS, PALETTE, WINDOW } from './config.js';
 
 const LIGHT_GAP = 30;
 const SPARK_GRAVITY = 900; // px/s²
@@ -151,7 +151,7 @@ function drawBanner(ctx, t) {
   ctx.font = `bold ${Math.round(64 * pop * (1 + 0.05 * Math.sin(t * 12)))}px system-ui, sans-serif`;
   ctx.fillText('JACKPOT', cx, cy);
   ctx.font = `bold ${Math.round(30 * pop)}px system-ui, sans-serif`;
-  ctx.fillText(`+${JACKPOT.reward}`, cx, cy + 52);
+  ctx.fillText(`+${JACKPOT.reward * ECONOMY.ballCost}`, cx, cy + 52); // the reward's worth in cash
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
 }
