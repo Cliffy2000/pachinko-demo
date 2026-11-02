@@ -25,16 +25,18 @@ function takeFromBox() {
   return true;
 }
 
-// Draws from the chosen source, or the other one when it is empty.
+// Draws from the chosen source, or the other one when it is empty. Returns
+// whether a ball was fired.
 export function launch(speed, fromOverflow) {
   const [first, second] = fromOverflow ? [takeFromOverflow, takeFromBox] : [takeFromBox, takeFromOverflow];
-  if (!first() && !second()) return;
+  if (!first() && !second()) return false;
 
   const seat = ridePoint(LAUNCH.seat);
   const shot = ball(KIND.PLAY, seat.x, seat.y);
   shot.collisionFilter.mask = 0;
   shot.plugin.ride = { t: LAUNCH.seat, v: speed };
   add(shot);
+  return true;
 }
 
 export const isRiding = (body) => Boolean(body.plugin.ride);

@@ -7,6 +7,7 @@ import { isInJackpot, isOverDrain } from './field.js';
 import { isRiding, updateRide } from './launch.js';
 import { reward, updateBoxBall } from './deck.js';
 import { celebrate, throwCash } from './fx.js';
+import { playCash, playJackpot } from './audio.js';
 import { counts, queue, stats } from './state.js';
 
 const { Events } = Matter;
@@ -21,6 +22,7 @@ function updatePlayBall(body) {
     stats.jackpots += 1;
     reward(JACKPOT.reward);
     celebrate(body.position);
+    playJackpot();
     return false;
   }
   if (body.position.y <= DECK_TOP) return true;
@@ -62,6 +64,7 @@ function payKnobHits({ pairs }) {
     if (!knob) continue;
     stats.cash += KNOBS.cash;
     throwCash(knob.position);
+    playCash();
   }
 }
 

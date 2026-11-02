@@ -9,17 +9,21 @@ import { canvas, drawFrame, rememberPoses } from './view.js';
 import { bindLever } from './input.js';
 import { bindButtons, readPower, showAuto, showPower, showSource, updatePanel } from './panel.js';
 import { runLoop } from './loop.js';
+import { playLaunch, startAudio } from './audio.js';
 
 const { Engine } = Matter;
 
 buildField();
 buildDeck();
 startRules();
+startAudio(engine);
 
 let autoFire = false;
 let fromOverflow = false;
 
-const fire = (power) => launch(LAUNCH.minSpeed + (LAUNCH.maxSpeed - LAUNCH.minSpeed) * power, fromOverflow);
+function fire(power) {
+  if (launch(LAUNCH.minSpeed + (LAUNCH.maxSpeed - LAUNCH.minSpeed) * power, fromOverflow)) playLaunch();
+}
 const autoPower = () => clamp(readPower() + (Math.random() * 2 - 1) * LAUNCH.autoJitter, 0, 1);
 
 bindLever(canvas, { onPull: showPower, onRelease: fire });

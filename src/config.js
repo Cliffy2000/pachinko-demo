@@ -164,6 +164,17 @@ export const ECONOMY = {
   ballCost: 4
 };
 
+/* ---- audio ------------------------------------------------------------- */
+
+export const AUDIO = {
+  volume: 0.6,
+  maxVoices: 32,
+  pinGapS: 0.012, // shortest gap between two pin pings
+  tapGapS: 0.01,
+  minImpact: 40, // px/s; slower contacts make no sound
+  fullImpact: 900 // px/s; impacts this hard play at full volume
+};
+
 /* ---- lever ------------------------------------------------------------- */
 
 // Pivot level with the box rim, right of the box's right wall.
