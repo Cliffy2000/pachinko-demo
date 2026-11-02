@@ -133,10 +133,10 @@ export const DECK = {
 
 /* ---- lever ------------------------------------------------------------- */
 
-// Pivot beside the box's right wall, level with its rim.
+// Pivot beside the box's right wall, level with its middle.
 export const LEVER = {
   x: DECK.box.x + DECK.box.w + DECK.plate + 30,
-  y: DECK.box.y,
+  y: DECK.box.y + (DECK.box.h + DECK.boxDrop) / 2,
   length: 108,
   travel: 40, // degrees at full pull
   pullPx: 160, // drag distance for a full pull
