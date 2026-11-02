@@ -57,6 +57,16 @@ const CHANNEL_L = RAIL_T / 2 + RAIL_CLEAR / 2;     // lift at the middle of the 
 // two meet tangentially and a ball crosses the join without a step to hit.
 const PANEL_LEN = 100;
 
+// A ball in the channel is driven along the rail rather than resolved against
+// it. A launch lane is a one dimensional problem - position on the rail is a
+// single angle - and letting the solver negotiate it against four overlapping
+// slabs every step is what produced the chatter: the slabs a ball touches span
+// about seven degrees of arc whatever step they are cut at, so the averaged
+// normal jogs as that set shifts. Driving it removes the contact entirely, and
+// with it any argument about friction.
+const RAIL_TOP = 300;                        // deg of sweep where the rail ends, 12 o'clock
+const RAIL_DRAG = 0.0003;                    // speed lost per step on the rail
+
 // Hole in the rail at the bottom, where the curve is tangent to the window.
 const DRAIN_DEG = -90;
 const DRAIN_SPAN = 17.4;                     // deg, about 73px of rail
@@ -78,7 +88,7 @@ const DRAIN_BOX = {
 // less than that in a step. The fastest perpendicular impact is about 18, so
 // there is 1.5x in hand. MAX_POWER itself is 25, but that is tangent to the
 // channel at launch, never into a wall.
-const MIN_POWER = 17;                        // px/step, just short of the top
+const MIN_POWER = 18;                        // px/step, just short of the top
 const MAX_POWER = 25;                        // px/step
 
 /* ---- deck -------------------------------------------------------------- */
@@ -210,7 +220,12 @@ function slab(x, y, w, h, angle = 0, grip = {}) {
 // hole stays put while the channel floor drops away under it.
 function railLift(t) {
   if (t <= RAIL_SWEEP - 180) return 0;
-  if (t <= RAIL_SWEEP - 120) return (RAIL_PITCH * (t - (RAIL_SWEEP - 180))) / RAIL_LIFT;
+  if (t <= RAIL_SWEEP - 120) {
+    // Smoothstep, not a straight ramp: a linear one leaves a corner in the
+    // curve at both ends of the lift, which the ride feels as a kick.
+    const u = (t - (RAIL_SWEEP - 180)) / RAIL_LIFT;
+    return RAIL_PITCH * u * u * (3 - 2 * u);
+  }
   if (t <= MOUTH_FROM) return RAIL_PITCH;
 
   const u = (t - MOUTH_FROM) / (RAIL_SWEEP - MOUTH_FROM);
@@ -283,6 +298,22 @@ function launchPanel() {
   const panel = slab(end.x + PANEL_LEN / 2, end.y, PANEL_LEN + RAIL_T, RAIL_T, 0, RAIL_GRIP);
   panel.render.visible = false;
   return panel;
+}
+
+// Where a ball's centre sits when it is riding the inner face of the outer
+// winding. The channel widens at the mouth, so this is not a fixed offset.
+const railContactLift = (t) => railLift(t) - RAIL_T / 2 - BALL_R;
+const railRidePoint = (t) => atAngle(RAIL_HEAD + t, railContactLift(t));
+
+// Unit tangent in the travel direction, which is decreasing t, and how much
+// arc a degree of sweep is worth there.
+function railFrame(t) {
+  const a = railRidePoint(t - 0.5);
+  const b = railRidePoint(t + 0.5);
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const len = Math.hypot(dx, dy);
+  return { tx: dx / len, ty: dy / len, perDeg: len };
 }
 
 // Dead centre of the panel, resting on it.
@@ -427,6 +458,50 @@ function spillForward(body) {
 
 /* ---- play -------------------------------------------------------------- */
 
+// Gravity as the engine actually applies it, in px per step squared.
+const G_STEP = engine.gravity.y * (engine.gravity.scale ?? 0.001) * (1000 / 60) ** 2;
+
+// A ball that has crossed the end of the panel moving left gets picked up by
+// the rail. Its t is found from where it actually is, so there is no jump.
+function catchRail(body) {
+  const mouth = railRidePoint(RAIL_SWEEP);
+  if (body.position.y < DRAIN_BOX.y2) return false;
+  if (body.position.x > mouth.x || body.velocity.x >= 0) return false;
+
+  let t = RAIL_SWEEP;
+  while (t > RAIL_TOP && railRidePoint(t).x > body.position.x) t -= 0.5;
+
+  body.railT = t;
+  body.railV = Math.hypot(body.velocity.x, body.velocity.y);
+  body.collisionFilter.mask = 0;
+  return true;
+}
+
+function leaveRail(body, frame) {
+  body.railT = clamp(body.railT, RAIL_TOP, RAIL_SWEEP);
+  const p = railRidePoint(body.railT);
+  Body.setPosition(body, p);
+  Body.setVelocity(body, { x: frame.tx * body.railV, y: frame.ty * body.railV });
+  body.railT = null;
+  body.collisionFilter.mask = PLAY_FILTER.mask;
+}
+
+// One step of the one dimensional ride: gravity along the rail, then advance.
+function rideRail(body) {
+  const frame = railFrame(body.railT);
+  body.railV = (body.railV + G_STEP * frame.ty) * (1 - RAIL_DRAG);
+  body.railT -= body.railV / frame.perDeg;
+
+  if (body.railT <= RAIL_TOP || body.railT >= RAIL_SWEEP) {
+    leaveRail(body, frame);
+    return;
+  }
+
+  const p = railRidePoint(body.railT);
+  Body.setPosition(body, p);
+  Body.setVelocity(body, { x: frame.tx * body.railV, y: frame.ty * body.railV });
+}
+
 function launch(power) {
   const tray = ballsLabelled('tray');
   if (tray.length === 0) return;
@@ -467,6 +542,16 @@ Events.on(engine, 'afterUpdate', () => {
     }
 
     if (body.label === 'play') {
+      if (body.railT) {
+        rideRail(body);
+        counts.play += 1;
+        continue;
+      }
+      if (catchRail(body)) {
+        counts.play += 1;
+        continue;
+      }
+
       if (x > DRAIN_BOX.x1 && x < DRAIN_BOX.x2 && y > DRAIN_BOX.y1 && y < DRAIN_BOX.y2) {
         Composite.remove(engine.world, body);
         state.drained += 1;
