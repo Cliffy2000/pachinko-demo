@@ -1,7 +1,7 @@
 // Tunables. Lengths in px, angles in degrees, speeds in px/s, times in s.
 
 export const DEBUG = {
-  hitboxes: true // draw physics bodies instead of the finished art
+  hitboxes: false // draw physics bodies instead of the finished art
 };
 
 export const PHYSICS = {
@@ -29,7 +29,8 @@ export const PALETTE = {
   ball: '#e8eef5',
   hole: '#e0574a',
   knob: '#e0574a',
-  pivot: '#8296ad'
+  pivot: '#8296ad',
+  pin: '#8296ad'
 };
 
 /* ---- rail -------------------------------------------------------------- */
@@ -72,7 +73,20 @@ export const LAUNCH = {
   openAt: 360, // channel opens; the ball may leave the rail from here
   minSpeed: 1260, // just short of making the top
   maxSpeed: 1586,
-  drag: 0.018 // fraction of speed lost per second on the rail
+  drag: 0.018, // fraction of speed lost per second on the rail
+  autoInterval: 0.6 // s between shots on auto fire; 100 a minute
+};
+
+/* ---- pins -------------------------------------------------------------- */
+
+// Placeholder grid: staggered rows, every other row shifted half a pitch.
+export const PINS = {
+  r: 2.5,
+  rows: 5,
+  cols: 7,
+  pitch: 48,
+  rowGap: 42,
+  top: WINDOW.y + 190
 };
 
 /* ---- deck -------------------------------------------------------------- */

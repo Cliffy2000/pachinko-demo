@@ -12,6 +12,7 @@ const out = {
   spilled: $('stat-spilled')
 };
 const power = $('power');
+const autoButton = $('auto-fire');
 
 export function updatePanel() {
   out.tray.textContent = counts.tray;
@@ -25,7 +26,15 @@ export function showPower(pull) {
   power.value = Math.round(pull * 100);
 }
 
-export function bindButtons({ onFill, onPayout }) {
+export const readPower = () => power.value / 100;
+
+export function showAuto(on) {
+  autoButton.textContent = on ? 'Auto fire: on' : 'Auto fire: off';
+  autoButton.setAttribute('aria-pressed', on);
+}
+
+export function bindButtons({ onFill, onPayout, onAuto }) {
   $('add-balls').addEventListener('click', onFill);
   $('payout').addEventListener('click', onPayout);
+  autoButton.addEventListener('click', onAuto);
 }

@@ -1,8 +1,8 @@
-// The playfield: the rail and the drain. Pins will live here.
+// The playfield: the rail, the drain and the pins.
 
-import { BALL, DEBUG, DRAIN, ELLIPSE, RAIL } from './config.js';
+import { BALL, DEBUG, DRAIN, ELLIPSE, PINS, RAIL } from './config.js';
 import { outward, rad, railPoint } from './geometry.js';
-import { FILTER, SURFACE, add, wall } from './world.js';
+import { FILTER, SURFACE, add, pin, wall } from './world.js';
 
 const drainT = (((DRAIN.bearing - RAIL.head) % 360) + 360) % 360;
 export const DRAIN_GAP = { from: drainT - DRAIN.span / 2, to: drainT + DRAIN.span / 2 };
@@ -45,6 +45,19 @@ function railSlabs() {
   return slabs;
 }
 
+function pinGrid() {
+  const pins = [];
+  for (let row = 0; row < PINS.rows; row++) {
+    const shift = row % 2 ? PINS.pitch / 2 : 0;
+    const cols = row % 2 ? PINS.cols - 1 : PINS.cols;
+    const left = ELLIPSE.x - ((PINS.cols - 1) * PINS.pitch) / 2 + shift;
+    for (let col = 0; col < cols; col++) {
+      pins.push(pin(left + col * PINS.pitch, PINS.top + row * PINS.rowGap, PINS.r));
+    }
+  }
+  return pins;
+}
+
 export function buildField() {
-  add(railSlabs());
+  add(railSlabs(), pinGrid());
 }

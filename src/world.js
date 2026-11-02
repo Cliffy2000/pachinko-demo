@@ -13,7 +13,7 @@ engine.velocityIterations = PHYSICS.velocityIterations;
 export const STEP_S = 1 / PHYSICS.hz;
 export const GRAVITY = engine.gravity.y * engine.gravity.scale * 1e6; // px/s²
 
-export const KIND = { PLAY: 'play', TRAY: 'tray', STORE: 'store', SPILL: 'spill' };
+export const KIND = { PLAY: 'play', TRAY: 'tray', STORE: 'store', SPILL: 'spill', PIN: 'pin' };
 
 // Field and deck never touch: storage refills fall through the playfield.
 const CAT = { FIELD: 0x1, DECK: 0x2, PLAY: 0x4, STOCK: 0x8 };
@@ -31,7 +31,8 @@ export const FILTER = {
 export const SURFACE = {
   rail: { friction: 0.005, frictionStatic: 0, slop: 0.01 },
   tray: { friction: 0, frictionStatic: 0 },
-  storage: { friction: 0.001, frictionStatic: 0 }
+  storage: { friction: 0.001, frictionStatic: 0 },
+  pin: { friction: 0.02, frictionStatic: 0, restitution: 0.5, slop: 0.01 }
 };
 
 const BALL_SPEC = {
@@ -40,6 +41,17 @@ const BALL_SPEC = {
   [KIND.STORE]: { sides: 10, restitution: 0.45, friction: 0.001, frictionAir: 0.001, filter: FILTER.stock },
   [KIND.SPILL]: { sides: 10, restitution: 0.45, friction: 0.02, frictionAir: 0.001, filter: FILTER.ghost }
 };
+
+export function pin(x, y, r) {
+  return Bodies.circle(x, y, r, {
+    label: KIND.PIN,
+    isStatic: true,
+    ...SURFACE.pin,
+    collisionFilter: FILTER.field,
+    plugin: {},
+    render: { fillStyle: PALETTE.pin }
+  });
+}
 
 export function wall(x, y, w, h, angle, surface, filter) {
   return Bodies.rectangle(x, y, w, h, {
