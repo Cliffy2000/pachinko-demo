@@ -66,6 +66,9 @@ const PANEL_LEN = 100;
 // with it any argument about friction.
 const RAIL_TOP = 300;                        // deg of sweep where the rail ends, 12 o'clock
 const RAIL_DRAG = 0.0003;                    // speed lost per step on the rail
+// Gravity only bites above this point on the sweep. Below it the launch is
+// treated as carrying the ball, the way a short real launch rail would.
+const RAIL_GRAVITY_FROM = 390;               // deg of sweep, 9 o'clock
 
 // Hole in the rail at the bottom, where the curve is tangent to the window.
 const DRAIN_DEG = -90;
@@ -88,8 +91,8 @@ const DRAIN_BOX = {
 // less than that in a step. The fastest perpendicular impact is about 18, so
 // there is 1.5x in hand. MAX_POWER itself is 25, but that is tangent to the
 // channel at launch, never into a wall.
-const MIN_POWER = 18;                        // px/step, just short of the top
-const MAX_POWER = 25;                        // px/step
+const MIN_POWER = 11;                        // px/step, just short of the top
+const MAX_POWER = 18;                        // px/step
 
 /* ---- deck -------------------------------------------------------------- */
 
@@ -489,7 +492,8 @@ function leaveRail(body, frame) {
 // One step of the one dimensional ride: gravity along the rail, then advance.
 function rideRail(body) {
   const frame = railFrame(body.railT);
-  body.railV = (body.railV + G_STEP * frame.ty) * (1 - RAIL_DRAG);
+  const pull = body.railT <= RAIL_GRAVITY_FROM ? G_STEP * frame.ty : 0;
+  body.railV = (body.railV + pull) * (1 - RAIL_DRAG);
   body.railT -= body.railV / frame.perDeg;
 
   if (body.railT <= RAIL_TOP || body.railT >= RAIL_SWEEP) {
