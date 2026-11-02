@@ -40,7 +40,7 @@ const RAIL_T = 10;                           // drawn thickness
 // (a 15 degree hit came out at 0 degrees). At 20 both stop: nothing passes
 // below 31 px/step and every bounce angle is correct. 24 and 28 measured
 // identical to 20, so 20 is the whole of the fix. Our fastest ball is 26.5.
-const RAIL_HIT = 22.5;
+const RAIL_HIT = 18;
 const RAIL_CLEAR = 28;                       // channel width
 const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // semi-axis gain per turn
 const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
@@ -761,16 +761,34 @@ payoutButton.addEventListener('click', () => {
 });
 
 // Our own loop rather than Matter's Runner, so the engine can take several
-// steps per frame while dispensing and the readout stay once per frame.
-function frame() {
-  routeStock();
-  if (feed.store > 0 && dispenseStore()) feed.store -= 1;
-  if (feed.tray > 0 && dispenseTray()) feed.tray -= 1;
+// steps per frame. It has to be driven by the clock, not by the frame: a fixed
+// number of steps per callback runs the whole machine at double speed on a
+// 120Hz display. Steps are a fixed size and the leftover is carried over.
+let lastFrame = null;
+let lag = 0;
+let steps = 0;
 
-  for (let i = 0; i < SUBSTEPS; i++) Engine.update(engine, STEP_MS);
+function frame(now) {
+  requestAnimationFrame(frame);
+
+  if (lastFrame === null) lastFrame = now;
+  // Capped, so a backgrounded tab does not come back to a thousand steps.
+  lag = Math.min(lag + (now - lastFrame), STEP_MS * SUBSTEPS * 3);
+  lastFrame = now;
+
+  while (lag >= STEP_MS) {
+    // Dispensing belongs to the 60Hz beat, not to every substep.
+    if (steps % SUBSTEPS === 0) {
+      routeStock();
+      if (feed.store > 0 && dispenseStore()) feed.store -= 1;
+      if (feed.tray > 0 && dispenseTray()) feed.tray -= 1;
+    }
+    Engine.update(engine, STEP_MS);
+    steps += 1;
+    lag -= STEP_MS;
+  }
 
   draw();
-  requestAnimationFrame(frame);
 }
 
 Render.run(render);
