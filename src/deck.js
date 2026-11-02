@@ -7,7 +7,7 @@ import { counts, queue } from './state.js';
 const { box, plate } = DECK;
 
 const PITCH = BALL.r * 2 + 1;
-const spillLine = box.y - BALL.r * 2; // full at one ball above the rim
+const spillLine = box.y - BALL.r * 2 * DECK.fullAbove;
 const spillSteps = Math.round(DECK.spillDelay * PHYSICS.hz);
 
 // Floor sloping down boxDrop to the right, walls rising from its ends to the rim.

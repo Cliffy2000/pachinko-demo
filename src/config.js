@@ -22,7 +22,7 @@ export const CANVAS = {
   height: 835 + MARGIN * 2 // window top to box floor, plus margins
 };
 
-export const BALL = { r: 6.4, density: 0.004 };
+export const BALL = { r: 6.2, density: 0.004 };
 
 export const PALETTE = {
   wall: '#2d3a4b',
@@ -67,7 +67,7 @@ export const ELLIPSE = {
   b: WINDOW.h / 2 - 4 // top just inside the window, bottom just past it
 };
 
-export const DRAIN = { bearing: -90, width: 78 }; // width along the rail
+export const DRAIN = { bearing: -90, width: 82, trimLeft: 4 }; // px along the rail
 
 export const LAUNCH = {
   seat: 460, // sweep position of a fresh ball
@@ -82,15 +82,21 @@ export const LAUNCH = {
 
 /* ---- pins -------------------------------------------------------------- */
 
-// Placeholder layout: a staggered grid clipped to the field, kept clear of the
-// rail and of the jackpot cup.
+// Laid out after the classic nail groups. Points are [dx from the centre line,
+// y from the window top] for the right half; each is mirrored to the left.
 export const PINS = {
   r: 4,
-  pitch: 90,
-  rowGap: 70,
-  top: WINDOW.y + 100,
-  railClear: 34, // gap left between the outermost pins and the rail
-  cupClear: 70
+  railClear: 20, // pins closer than this to the rail are dropped
+  layout: {
+    sky: [[0, 110], [35, 114], [70, 126]], // spread balls arriving over the top
+    road: [[205, 215], [170, 245], [135, 275], [100, 305], [70, 332]], // lead in towards the cup
+    windmill: [[155, 350], [185, 350], [170, 372]], // where a windmill would sit
+    armour: [[232, 300], [236, 318], [240, 336], [244, 354]], // close-set: a wall down the side lane
+    sleeve: [[230, 420], [205, 460]], // knock balls out of the side lane
+    life: [[13, 398]], // flank the cup mouth
+    lower: [[110, 480], [160, 458]], // scatter the middle before the drain
+    guard: [[30, 540]] // over the drain
+  }
 };
 
 /* ---- jackpot ----------------------------------------------------------- */
@@ -122,6 +128,7 @@ const BOX_CORNER = { x: WINDOW.x + WINDOW.w / 2 + 81, y: MARGIN + 827 };
 export const DECK = {
   plate: 8,
   floor: 12,
+  fullAbove: 2, // balls stacked above the rim before the box overflows
   box: { x: BOX_CORNER.x - BOX_W, y: BOX_CORNER.y - BOX_DROP - BOX_DEPTH, w: BOX_W, h: BOX_DEPTH },
   boxDrop: BOX_DROP,
   capacity: 200, // what Fill tops the box up to

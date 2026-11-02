@@ -1,12 +1,16 @@
 // The playfield: the rail, the drain, the pins and the jackpot cup.
 
-import { BALL, DEBUG, DRAIN, ELLIPSE, JACKPOT, PALETTE, PINS, RAIL } from './config.js';
-import { outward, railPoint } from './geometry.js';
+import { BALL, DEBUG, DRAIN, ELLIPSE, JACKPOT, PALETTE, PINS, RAIL, WINDOW } from './config.js';
+import { outward, rad, railPoint } from './geometry.js';
 import { FILTER, SURFACE, add, pin, wall } from './world.js';
 
+// The drain is at the bottom, where the rail's radius is the ellipse's b.
 const drainT = (((DRAIN.bearing - RAIL.head) % 360) + 360) % 360;
-const drainSpan = (DRAIN.width / ELLIPSE.a) * (180 / Math.PI);
-export const DRAIN_GAP = { from: drainT - drainSpan / 2, to: drainT + drainSpan / 2 };
+const pxPerDeg = ELLIPSE.b * rad(1);
+export const DRAIN_GAP = {
+  from: drainT + (DRAIN.trimLeft - DRAIN.width / 2) / pxPerDeg,
+  to: drainT + DRAIN.width / 2 / pxPerDeg
+};
 
 const holeReach = DRAIN.width / 2 + BALL.r;
 export const isOverDrain = (x) => Math.abs(x - ELLIPSE.x) < holeReach;
@@ -53,18 +57,14 @@ function insideField(x, y, clear) {
   return u * u + v * v <= 1;
 }
 
-function pinGrid() {
-  const pins = [];
-  const clear = PINS.railClear + PINS.r + RAIL.thickness / 2;
+function pinLayout() {
+  const clear = PINS.railClear + BALL.r * 2 + PINS.r + RAIL.thickness / 2;
+  const points = Object.values(PINS.layout)
+    .flat()
+    .flatMap(([dx, dy]) => (dx === 0 ? [[0, dy]] : [[dx, dy], [-dx, dy]]))
+    .map(([dx, dy]) => ({ x: ELLIPSE.x + dx, y: WINDOW.y + dy }));
 
-  for (let row = 0, y = PINS.top; y < ELLIPSE.y + ELLIPSE.b; row++, y += PINS.rowGap) {
-    const shift = row % 2 ? PINS.pitch / 2 : 0;
-    for (let x = ELLIPSE.x + shift - PINS.pitch * 4; x < ELLIPSE.x + ELLIPSE.a; x += PINS.pitch) {
-      const nearCup = Math.hypot(x - JACKPOT.x, y - JACKPOT.y) < PINS.cupClear;
-      if (insideField(x, y, clear) && !nearCup) pins.push(pin(x, y, PINS.r));
-    }
-  }
-  return pins;
+  return points.filter((p) => insideField(p.x, p.y, clear)).map((p) => pin(p.x, p.y, PINS.r));
 }
 
 // Sealed sides and floor, open only at the top. A ball whose centre drops
@@ -92,5 +92,5 @@ function cup() {
 }
 
 export function buildField() {
-  add(railSlabs(), pinGrid(), cup());
+  add(railSlabs(), pinLayout(), cup());
 }
