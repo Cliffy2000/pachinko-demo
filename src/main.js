@@ -86,8 +86,8 @@ const DRAIN_X2 = ELL.x + (ELL_A * DRAIN_SPAN * Math.PI / 180) / 2 + BALL_R;
 // less than that in a step. The fastest perpendicular impact is about 18, so
 // there is 1.5x in hand. MAX_POWER itself is 25, but that is tangent to the
 // channel at launch, never into a wall.
-const MIN_POWER = 20.8;                        // px/step, just short of the top
-const MAX_POWER = 30;                        // px/step
+const MIN_POWER = 21;                        // px/step, just short of the top
+const MAX_POWER = 27.4;                        // px/step
 
 /* ---- deck -------------------------------------------------------------- */
 
@@ -327,14 +327,16 @@ function ball(x, y, label) {
   return Bodies.polygon(x, y, label === 'play' ? 48 : 10, BALL_R, {
     label,
     circleRadius: BALL_R,
-    // Matter takes the HIGHER restitution of a pair, so the rail cannot damp a
-    // bouncy ball: this number alone decides how the rail ride feels. A ball
-    // held against a curve is in contact every step, and at 0.45 each of those
-    // contacts kicked it back off.
-    restitution: label === 'play' ? 0.2 : 0.45,
+    // This was dropped to 0.2 to stop the ball being kicked off the launch
+    // rail, back when it was resolved against the slabs every step. It is
+    // driven along the rail now, so that reason is gone and 0.2 only shows up
+    // as the field wall eating a ball's speed on impact. Steel on steel is
+    // nearer 0.6. Matter skips restitution below a 2px/step approach, so
+    // rolling and resting contacts are untouched by this.
+    restitution: label === 'play' ? 0.55 : 0.45,
     friction: grip.friction,
     frictionStatic: grip.frictionStatic,
-    frictionAir: label === 'tray' ? 0.0002 : label === 'play' ? 0.0003 : 0.001,
+    frictionAir: label === 'tray' ? 0.0002 : label === 'play' ? 0.0001 : 0.001,
     slop: 0.01,
     collisionFilter: label === 'play' ? { ...PLAY_FILTER } : { ...STOCK_FILTER },
     density: 0.004,
