@@ -101,7 +101,7 @@ export const JACKPOT = {
   mouth: 26 * 1.6, // inner width
   depth: 22, // inside, rim to floor
   wall: 5,
-  floor: 7,
+  floor: 9,
   reward: 100,
 
   shakeS: 0.6,
