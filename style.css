@@ -96,6 +96,16 @@ canvas {
 
 .hint { margin: 0; font-size: 12px; color: var(--muted); }
 
+.brand {
+  margin: auto 0 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+
+.brand-hide-cursor { cursor: none; }
+
 @media (max-width: 720px) {
   .panel { width: 100%; max-width: 450px; }
 }
