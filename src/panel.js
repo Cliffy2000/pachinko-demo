@@ -9,7 +9,8 @@ const out = {
   store: $('stat-store'),
   live: $('stat-live'),
   drained: $('stat-drained'),
-  spilled: $('stat-spilled')
+  spilled: $('stat-spilled'),
+  jackpots: $('stat-jackpots')
 };
 const power = $('power');
 const autoButton = $('auto-fire');
@@ -20,6 +21,7 @@ export function updatePanel() {
   out.live.textContent = counts.play;
   out.drained.textContent = stats.drained;
   out.spilled.textContent = stats.spilled;
+  out.jackpots.textContent = stats.jackpots;
 }
 
 export function showPower(pull) {

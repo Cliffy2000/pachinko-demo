@@ -1,6 +1,6 @@
-// The playfield: the rail, the drain and the pins.
+// The playfield: the rail, the drain, the pins and the jackpot cup.
 
-import { BALL, DEBUG, DRAIN, ELLIPSE, PINS, RAIL } from './config.js';
+import { BALL, DEBUG, DRAIN, ELLIPSE, JACKPOT, PALETTE, PINS, RAIL } from './config.js';
 import { outward, rad, railPoint } from './geometry.js';
 import { FILTER, SURFACE, add, pin, wall } from './world.js';
 
@@ -45,19 +45,44 @@ function railSlabs() {
   return slabs;
 }
 
+// Inside the rail by at least `clear`, measured on the ellipse's own scale.
+function insideField(x, y, clear) {
+  const u = (x - ELLIPSE.x) / (ELLIPSE.a - clear);
+  const v = (y - ELLIPSE.y) / (ELLIPSE.b - clear);
+  return u * u + v * v <= 1;
+}
+
 function pinGrid() {
   const pins = [];
-  for (let row = 0; row < PINS.rows; row++) {
+  const clear = PINS.railClear + PINS.r + RAIL.thickness / 2;
+
+  for (let row = 0, y = PINS.top; y < ELLIPSE.y + ELLIPSE.b; row++, y += PINS.rowGap) {
     const shift = row % 2 ? PINS.pitch / 2 : 0;
-    const cols = row % 2 ? PINS.cols - 1 : PINS.cols;
-    const left = ELLIPSE.x - ((PINS.cols - 1) * PINS.pitch) / 2 + shift;
-    for (let col = 0; col < cols; col++) {
-      pins.push(pin(left + col * PINS.pitch, PINS.top + row * PINS.rowGap, PINS.r));
+    for (let x = ELLIPSE.x + shift - PINS.pitch * 4; x < ELLIPSE.x + ELLIPSE.a; x += PINS.pitch) {
+      const nearCup = Math.hypot(x - JACKPOT.x, y - JACKPOT.y) < PINS.cupClear;
+      if (insideField(x, y, clear) && !nearCup) pins.push(pin(x, y, PINS.r));
     }
   }
   return pins;
 }
 
+// Two posts with an open bottom. A ball whose centre drops below the rim
+// between them has gone in.
+const CUP = { half: JACKPOT.mouth / 2, floor: JACKPOT.y + JACKPOT.depth };
+
+export const isInJackpot = ({ x, y }) =>
+  Math.abs(x - JACKPOT.x) < CUP.half && y > JACKPOT.y + BALL.r && y < CUP.floor;
+
+function cup() {
+  const off = CUP.half + JACKPOT.wall / 2;
+  const y = JACKPOT.y + JACKPOT.depth / 2;
+  return [-off, off].map((dx) => {
+    const post = wall(JACKPOT.x + dx, y, JACKPOT.wall, JACKPOT.depth, 0, SURFACE.pin, FILTER.field);
+    post.render.fillStyle = PALETTE.cup;
+    return post;
+  });
+}
+
 export function buildField() {
-  add(railSlabs(), pinGrid());
+  add(railSlabs(), pinGrid(), cup());
 }

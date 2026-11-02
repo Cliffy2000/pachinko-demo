@@ -114,7 +114,10 @@ export function dispense() {
   routeStock();
   if (queue.store > 0 && dropIntoStorage()) queue.store -= 1;
   if (queue.tray > 0 && dropIntoTray()) queue.tray -= 1;
+  queue.reward = Math.min(queue.reward, queue.store);
 }
+
+export const dispenseHz = () => DECK.dispenseHz * (queue.reward > 0 ? DECK.rewardSpeedup : 1);
 
 export function fillTray() {
   queue.tray = Math.max(queue.tray, DECK.trayCapacity - counts.tray);
@@ -122,6 +125,11 @@ export function fillTray() {
 
 export function payout(n = DECK.payout) {
   queue.store += n;
+}
+
+export function reward(n) {
+  queue.store += n;
+  queue.reward += n;
 }
 
 /* ---- per-step behaviour ------------------------------------------------ */

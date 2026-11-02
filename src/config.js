@@ -30,7 +30,9 @@ export const PALETTE = {
   hole: '#e0574a',
   knob: '#e0574a',
   pivot: '#8296ad',
-  pin: '#8296ad'
+  pin: '#8296ad',
+  cup: '#e0574a',
+  jackpot: '#ffd166'
 };
 
 /* ---- rail -------------------------------------------------------------- */
@@ -79,14 +81,31 @@ export const LAUNCH = {
 
 /* ---- pins -------------------------------------------------------------- */
 
-// Placeholder grid: staggered rows, every other row shifted half a pitch.
+// Placeholder layout: a staggered grid clipped to the field, kept clear of the
+// rail and of the jackpot cup.
 export const PINS = {
-  r: 2.5,
-  rows: 5,
-  cols: 7,
-  pitch: 48,
-  rowGap: 42,
-  top: WINDOW.y + 190
+  r: 4,
+  pitch: 90,
+  rowGap: 70,
+  top: WINDOW.y + 100,
+  railClear: 34, // gap left between the outermost pins and the rail
+  cupClear: 70
+};
+
+/* ---- jackpot ----------------------------------------------------------- */
+
+export const JACKPOT = {
+  x: WINDOW.x + WINDOW.w / 2,
+  y: WINDOW.y + 440, // rim of the cup
+  mouth: 26, // inner width
+  depth: 22,
+  wall: 5,
+  reward: 100,
+
+  shakeS: 0.6,
+  shakePx: 8,
+  showS: 2.4, // banner and lights
+  sparks: 40
 };
 
 /* ---- deck -------------------------------------------------------------- */
@@ -109,7 +128,8 @@ export const DECK = {
   trayPush: 0.225, // extra down-slope acceleration, as a fraction of gravity
 
   payout: 50,
-  dispenseHz: 60
+  dispenseHz: 60,
+  rewardSpeedup: 1.25 // dispenser runs this much faster while a jackpot pays out
 };
 
 /* ---- lever ------------------------------------------------------------- */

@@ -1,11 +1,12 @@
 // Per-step behaviour for every dynamic body, dispatched by kind. A new kind of
 // body gets its own entry in UPDATE.
 
-import { CANVAS, DECK_TOP } from './config.js';
+import { CANVAS, DECK_TOP, JACKPOT } from './config.js';
 import { KIND, allBodies, engine, remove } from './world.js';
-import { isOverDrain } from './field.js';
+import { isInJackpot, isOverDrain } from './field.js';
 import { isRiding, updateRide } from './launch.js';
-import { updateStorageBall, updateTrayBall } from './deck.js';
+import { reward, updateStorageBall, updateTrayBall } from './deck.js';
+import { celebrate } from './fx.js';
 import { counts, queue, stats } from './state.js';
 
 const { Events } = Matter;
@@ -14,6 +15,14 @@ const { Events } = Matter;
 // anywhere else it fell out of the launch area and goes back to the tray.
 function updatePlayBall(body) {
   if (isRiding(body)) return updateRide(body);
+
+  if (isInJackpot(body.position)) {
+    remove(body);
+    stats.jackpots += 1;
+    reward(JACKPOT.reward);
+    celebrate(body.position);
+    return false;
+  }
   if (body.position.y <= DECK_TOP) return true;
 
   remove(body);

@@ -5,6 +5,7 @@ import { rad, railPoint } from './geometry.js';
 import { DRAIN_GAP } from './field.js';
 import { KIND, allBodies, ballsOf, engine } from './world.js';
 import { lever } from './input.js';
+import { drawEffects } from './fx.js';
 
 const { Render, Events, Body } = Matter;
 
@@ -137,4 +138,5 @@ Events.on(render, 'afterRender', () => {
 
   if (!DEBUG.hitboxes) drawArt(ctx);
   drawLever(ctx);
+  drawEffects(ctx, canvas);
 });
