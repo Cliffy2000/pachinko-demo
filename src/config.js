@@ -30,12 +30,12 @@ export const PALETTE = {
   hole: '#e0574a',
   knob: '#e0574a',
   pivot: '#8296ad',
-  pin: '#8296ad',
-  cup: '#e0574a',
+  pin: '#b4c3d6',
+  cup: '#f2685b',
   gold: '#ffd166',
   coin: '#f5c542',
   coinEdge: '#b8860b',
-  cash: '#3fae5a',
+  cash: '#4cc96b',
   cashDark: '#25703a',
   bonusA: '#22d3ee', // small bonus: cyan and magenta
   bonusB: '#e040fb',
@@ -89,26 +89,32 @@ export const LAUNCH = {
 
 /* ---- pins -------------------------------------------------------------- */
 
-// Arched rows under the top of the rail, even staggered rows through the
-// middle, and small gates round the knobs and the cup. Points are [dx from the
-// centre line, y from the window top]; any dx other than 0 is mirrored.
+// Gently arched rows under the top of the rail, then rows through the middle,
+// then small gates round the knobs and the cup. Successive rows are offset by
+// a third of their 60 px pitch, so no ball can fall straight down untouched.
+// Points are [dx from the centre line, y from the window top]; any dx other
+// than 0 is mirrored.
 export const PINS = {
   r: 4,
   railClear: 20, // pins closer than this to the rail are dropped
+  scatterDeg: 4, // a bounce off a pin leaves up to this far off true, like a real nail
   layout: {
-    arch: [[0, 90], [60, 96], [120, 114]],
-    innerArch: [[30, 155], [90, 165], [150, 185], [205, 215]],
-    row: [[30, 240], [90, 240], [150, 240], [210, 240]],
-    staggered: [[0, 300], [60, 300], [120, 300], [180, 300]],
-    split: [[60, 360]], // sends traffic towards either the cup or a knob
+    arch: [[0, 95], [60, 99], [120, 113]],
+    rowB: [[20, 160], [80, 163], [140, 170], [200, 180]],
+    rowC: [[40, 222], [100, 222], [160, 222], [220, 222]],
+    rowD: [[0, 285], [60, 285], [120, 285], [180, 285], [240, 285]],
+    knobRow: [[60, 352], [138, 360], [208, 360]], // the split, and a gate either side of each knob
     cupGuard: [[0, 397]], // on the centre line, 60 px above the cup rim
-    knobGate: [[138, 360], [208, 360]],
+    cupSide: [[90, 420]],
     wall: [[225, 420]],
     cupWing: [[50, 445]],
+    underKnob: [[200, 468]],
     lower: [[100, 500], [160, 500]],
-    drain: [[70, 555]]
+    underCup: [[40, 520]],
+    drain: [[80, 558], [130, 540]]
   }
 };
+
 
 /* ---- lucky slot -------------------------------------------------------- */
 
@@ -128,16 +134,19 @@ export const DRAW = {
   y: LUCKY.y + 95, // roulette centre
   r: 34, // pocket ring
   track: 44, // where the ball rolls before it drops in
-  pockets: 20, // shared out by weight, at least one each
-  spinS: 2.6,
+  pockets: 25, // shared out by weight, at least one each
+  spinS: 2,
   holdS: 0.5, // result shown before the next draw starts
   laps: 3,
+  enterS: 0.4, // a ball's drop from the slot into the queue
+  // Small wins are labelled by the wheel; the rest get a banner.
   outcomes: [
-    { name: 'small', weight: 60, balls: 88, colour: '#5b6b80' },
-    { name: 'large', weight: 25, balls: 288, colour: '#f5c542' },
-    { name: 'smallBonus', weight: 10, bonus: 'small', colour: '#22d3ee' },
-    { name: 'bigBonus', weight: 5, bonus: 'big', colour: '#ff4d4d' }
-  ]
+    { name: 'small', weight: 15, balls: 88, colour: '#7d8fa6', label: '+88' },
+    { name: 'large', weight: 7, balls: 288, colour: '#f5c542', banner: ['GOLD RUSH', '+288 balls'] },
+    { name: 'smallBonus', weight: 2, bonus: 'small', colour: '#22d3ee', banner: ['LUCKY TIME', 'free balls for 10 s'] },
+    { name: 'bigBonus', weight: 1, bonus: 'big', colour: '#ff4d4d', banner: ['FEVER', 'everything turns gold'] }
+  ],
+  stockedLabel: 'STOCKED' // a small bonus drawn during big bonus waits for it to end
 };
 
 // During a bonus, launches are free and pins and knobs pay. A drawn bonus of
@@ -154,6 +163,7 @@ export const BONUS = {
 export const FX = {
   lights: { hit: 0.3, large: 0.55, small: 0.75, big: 1 },
   flashS: { hit: 0.25, large: 0.6 },
+  bannerS: 2.2,
   shake: { px: 11, s: 0.6 },
   bonusShake: { px: 6, s: 0.3 }
 };

@@ -1,5 +1,5 @@
 // Visual effects: fireworks and coins, bills from cash knobs, the window lights
-// (flashes and bonus chases), and canvas shake. Runs on wall-clock time, not
+// (flashes and bonus chases), banners, and canvas shake. Runs on wall-clock time, not
 // physics steps.
 
 import { FX, KNOBS, PALETTE, WINDOW } from './config.js';
@@ -10,6 +10,7 @@ const BILL = { w: 9, h: 5, gravity: 260, drag: 2.5 }; // light paper: slow fall,
 
 const BURSTS = {
   tiny: { sparks: 6, coins: 0, speed: [80, 180], life: [0.25, 0.45], size: [2, 3] },
+  pop: { sparks: 12, coins: 3, speed: [140, 320], life: [0.35, 0.7], size: [2, 4] },
   small: { sparks: 26, coins: 6, speed: [180, 420], life: [0.5, 1], size: [3, 5] },
   large: { sparks: 70, coins: 34, speed: [300, 800], life: [0.9, 1.8], size: [4, 7] }
 };
@@ -19,6 +20,7 @@ let sparks = [];
 let bills = [];
 let flash = null;
 let shakes = [];
+let shown = null; // the banner
 
 const clock = () => performance.now() / 1000;
 const between = (lo, hi) => lo + Math.random() * (hi - lo);
@@ -65,6 +67,10 @@ export function flashLights(colour, level, seconds) {
 
 export function shake(px, seconds) {
   shakes.push({ px, from: clock(), seconds });
+}
+
+export function banner(title, sub, colour, glow) {
+  shown = { title, sub, colour, glow, from: clock() };
 }
 
 /* ---- window lights ----------------------------------------------------- */
@@ -179,6 +185,29 @@ function drawBills(ctx, dt) {
   }
 }
 
+/* ---- banner ------------------------------------------------------------ */
+
+// Pops in over 0.15 s, pulses, and fades over the last 0.4 s.
+function drawBanner(ctx, t) {
+  const age = t - shown.from;
+  const pop = Math.min(1, age / 0.15);
+  const cx = WINDOW.x + WINDOW.w / 2;
+  const cy = WINDOW.y + WINDOW.h * 0.3;
+
+  ctx.globalAlpha = Math.min(1, (FX.bannerS - age) / 0.4);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = shown.colour;
+  ctx.shadowColor = shown.glow;
+  ctx.shadowBlur = 16;
+  ctx.font = `bold ${Math.round(64 * pop * (1 + 0.05 * Math.sin(age * 12)))}px system-ui, sans-serif`;
+  ctx.fillText(shown.title, cx, cy);
+  ctx.font = `bold ${Math.round(26 * pop)}px system-ui, sans-serif`;
+  ctx.fillText(shown.sub, cx, cy + 50);
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+}
+
 /* ---- per frame --------------------------------------------------------- */
 
 function applyShake(canvas, t) {
@@ -203,5 +232,6 @@ export function drawEffects(ctx, canvas, chase) {
   }
   if (sparks.length) drawSparks(ctx, dt);
   if (bills.length) drawBills(ctx, dt);
+  if (shown && t - shown.from < FX.bannerS) drawBanner(ctx, t);
   ctx.restore();
 }

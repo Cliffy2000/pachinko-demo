@@ -31,7 +31,7 @@ export const FILTER = {
 export const SURFACE = {
   rail: { friction: 0.005, frictionStatic: 0, slop: 0.01 },
   box: { friction: 0, frictionStatic: 0 },
-  pin: { friction: 0.02, frictionStatic: 0, restitution: 0.95, slop: 0.01 }
+  pin: { friction: 0.02, frictionStatic: 0, restitution: 1, slop: 0.01 }
 };
 
 const BALL_SPEC = {

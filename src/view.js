@@ -135,9 +135,24 @@ function drawBehindField(ctx) {
   if (!DEBUG.hitboxes) paintBalls(ctx, ballsOf(KIND.PLAY));
 }
 
+// A soft highlight up and to the left on each pin and knob.
+function drawShine(ctx) {
+  ctx.save();
+  ctx.fillStyle = PALETTE.white;
+  ctx.globalAlpha = 0.5;
+  for (const b of ballsOf(KIND.PIN, KIND.KNOB)) {
+    const r = b.circleRadius;
+    ctx.beginPath();
+    ctx.arc(b.position.x - r * 0.3, b.position.y - r * 0.3, r * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 Events.on(render, 'afterRender', () => {
   const ctx = render.context;
   drawBehindField(ctx);
+  if (!DEBUG.hitboxes) drawShine(ctx);
 
   ctx.save();
   ctx.lineWidth = 2;

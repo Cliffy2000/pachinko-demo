@@ -1,19 +1,23 @@
-// The lucky slot: hits queue draws, one draw spins at a time on the roulette
-// under the slot, and each outcome pays out. The outcome is chosen by weight
-// when the draw starts; the spin is an animation that lands on a matching pocket.
+// The lucky slot: a ball that goes in drops down into the draw queue, one draw
+// spins at a time on the roulette under the slot, and each outcome pays out.
+// The outcome is chosen by weight when the draw starts; the spin is an
+// animation that lands on a matching pocket. During big bonus the roulette
+// spins without using the queue, and slot hits pay out instead of queueing.
 
-import { BONUS, DRAW, FX, PALETTE } from './config.js';
+import { BONUS, DRAW, FX, LUCKY, PALETTE } from './config.js';
 import { STEP_S } from './world.js';
 import { reward } from './deck.js';
-import { isBig, startBonus } from './bonus.js';
-import { fireworks, flashLights, shake } from './fx.js';
+import { isBig, startBonus, updateBonus } from './bonus.js';
+import { banner, fireworks, flashLights, shake } from './fx.js';
 import { playBonus, playCoins, playSlotHit } from './audio.js';
 import { stats } from './state.js';
 
 const TAU = Math.PI * 2;
 const AT_WHEEL = { x: DRAW.x, y: DRAW.y };
 
-export const draw = { queued: 0, spin: null, wheel: 0 };
+// entering: balls dropping from the slot, each { t, pays } where pays is a
+// big-bonus payout or 0 for a queued draw. note: a short label by the wheel.
+export const draw = { queued: 0, entering: [], spin: null, wheel: 0, note: null };
 
 // Pockets shared out by weight, at least one each. The rarest are placed first,
 // evenly spaced, so each outcome is spread round the wheel.
@@ -35,6 +39,42 @@ const POCKET_ANGLE = TAU / POCKETS.length;
 function pickOutcome() {
   let roll = Math.random() * DRAW.outcomes.reduce((s, o) => s + o.weight, 0);
   return DRAW.outcomes.find((o) => (roll -= o.weight) < 0) ?? DRAW.outcomes[0];
+}
+
+/* ---- the slot ---------------------------------------------------------- */
+
+// The drop runs from the cup floor down a short tube to the top of the queue.
+export const TUBE = {
+  from: { x: LUCKY.x, y: LUCKY.y + LUCKY.depth - 4 },
+  to: { x: DRAW.x - DRAW.track - 20, y: DRAW.y - DRAW.track + 6 }
+};
+
+export function enteringPose({ t }) {
+  const u = Math.min(1, t / DRAW.enterS);
+  const e = u * u; // falls, speeding up
+  const { from, to } = TUBE;
+  return { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * Math.sqrt(e) };
+}
+
+export function enterLuckySlot() {
+  stats.luckyHits += 1;
+  draw.entering.push({ t: 0, pays: isBig() ? BONUS.big.slotBalls : 0 });
+  playSlotHit();
+}
+
+// Once a ball reaches the queue: twin pops from the cup rims and a flash of
+// the window lights, or in big bonus a straight payout.
+function arrive({ pays }) {
+  const rims = [-1, 1].map((side) => ({ x: LUCKY.x + side * (LUCKY.mouth / 2 + LUCKY.wall / 2), y: LUCKY.y }));
+  if (pays) {
+    reward(pays);
+    rims.forEach((at) => fireworks(at, 'pop'));
+    playCoins('small');
+    return;
+  }
+  draw.queued += 1;
+  rims.forEach((at) => fireworks(at, 'pop', [PALETTE.white]));
+  flashLights(PALETTE.white, FX.lights.hit, FX.flashS.hit);
 }
 
 /* ---- the spin ---------------------------------------------------------- */
@@ -83,22 +123,11 @@ export function spinPose() {
 /* ---- outcomes ---------------------------------------------------------- */
 
 const BONUS_COLOURS = { small: [PALETTE.bonusA, PALETTE.bonusB], big: [PALETTE.gold] };
+const BANNER_COLOURS = { large: [PALETTE.gold, PALETTE.cup], smallBonus: [PALETTE.bonusA, PALETTE.bonusB], bigBonus: [PALETTE.gold, PALETTE.cup] };
 
-function settle(outcome) {
-  if (outcome.balls) {
-    reward(outcome.balls);
-    const large = outcome.name === 'large';
-    fireworks(AT_WHEEL, large ? 'large' : 'small');
-    playCoins(large ? 'large' : 'small');
-    if (large) flashLights(PALETTE.gold, FX.lights.large, FX.flashS.large);
-    return;
-  }
+const showBanner = (outcome) => banner(...outcome.banner, ...BANNER_COLOURS[outcome.name]);
 
-  const mode = outcome.bonus;
-  if (!startBonus(mode)) {
-    fireworks(AT_WHEEL, 'small', BONUS_COLOURS[mode]); // a small bonus during big bonus
-    return;
-  }
+function celebrateBonus(mode) {
   playBonus(mode);
   if (mode === 'small') {
     fireworks(AT_WHEEL, 'large', BONUS_COLOURS.small);
@@ -111,7 +140,29 @@ function settle(outcome) {
   );
 }
 
-export function updateDraws() {
+function settle(outcome) {
+  if (outcome.banner) showBanner(outcome);
+  draw.note = outcome.label ? { text: outcome.label, colour: outcome.colour } : null;
+
+  if (outcome.balls) {
+    reward(outcome.balls);
+    const large = outcome.name === 'large';
+    fireworks(AT_WHEEL, large ? 'large' : 'small');
+    playCoins(large ? 'large' : 'small');
+    if (large) flashLights(PALETTE.gold, FX.lights.large, FX.flashS.large);
+    return;
+  }
+
+  if (startBonus(outcome.bonus) === 'stocked') {
+    draw.note = { text: DRAW.stockedLabel, colour: outcome.colour };
+    fireworks(AT_WHEEL, 'small', BONUS_COLOURS.small);
+    playCoins('small');
+    return;
+  }
+  celebrateBonus(outcome.bonus);
+}
+
+function updateSpin() {
   const { spin } = draw;
   if (spin) {
     spin.t += STEP_S;
@@ -120,25 +171,29 @@ export function updateDraws() {
       draw.wheel = wheelAngle(spin, DRAW.spinS) % TAU;
       settle(spin.outcome);
     }
-    if (spin.t >= DRAW.spinS + DRAW.holdS) draw.spin = null;
+    if (spin.t >= DRAW.spinS + DRAW.holdS) {
+      draw.spin = null;
+      draw.note = null;
+    }
   }
-  if (!draw.spin && draw.queued > 0) {
+  if (draw.spin) return;
+  if (isBig()) draw.spin = startSpin();
+  else if (draw.queued > 0) {
     draw.queued -= 1;
     draw.spin = startSpin();
   }
 }
 
-// In big bonus the slot pays straight out instead of queueing a draw.
-export function enterLuckySlot(at) {
-  stats.luckyHits += 1;
-  if (isBig()) {
-    reward(BONUS.big.slotBalls);
-    fireworks(at, 'small');
-    playCoins('small');
-    return;
+export function updateLucky() {
+  for (const ball of draw.entering) ball.t += STEP_S;
+  const arrived = draw.entering.filter((b) => b.t >= DRAW.enterS);
+  draw.entering = draw.entering.filter((b) => b.t < DRAW.enterS);
+  arrived.forEach(arrive);
+
+  updateSpin();
+  const stockedStart = updateBonus(STEP_S);
+  if (stockedStart) {
+    showBanner(DRAW.outcomes.find((o) => o.bonus === stockedStart));
+    celebrateBonus(stockedStart);
   }
-  draw.queued += 1;
-  fireworks(at, 'small', [PALETTE.white]);
-  flashLights(PALETTE.white, FX.lights.hit, FX.flashS.hit);
-  playSlotHit();
 }

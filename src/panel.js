@@ -27,7 +27,9 @@ export function updatePanel() {
   out.drained.textContent = stats.drained;
   out.spilled.textContent = stats.spilled;
   out.lucky.textContent = stats.luckyHits;
-  out.bonus.textContent = bonus.mode ? `${bonus.mode} ${Math.ceil(bonus.left)}s` : '-';
+  out.bonus.textContent = bonus.mode
+    ? `${bonus.mode} ${Math.ceil(bonus.left)}s${bonus.stocked ? ` +${bonus.stocked}` : ''}`
+    : '-';
   out.cash.textContent = stats.cash;
   for (const b of buyButtons) b.disabled = !canBuy(Number(b.dataset.buy));
 

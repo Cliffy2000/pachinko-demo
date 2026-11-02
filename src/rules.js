@@ -1,27 +1,39 @@
 // Per-step behaviour for every dynamic body, dispatched by kind. A new kind of
 // body gets its own entry in UPDATE.
 
-import { CANVAS, DECK_TOP } from './config.js';
-import { KIND, STEP_S, allBodies, engine, remove } from './world.js';
+import { CANVAS, DECK_TOP, PINS } from './config.js';
+import { KIND, allBodies, engine, remove, setVelocity } from './world.js';
 import { isInLuckySlot, isOverDrain } from './field.js';
 import { isRiding, updateRide } from './launch.js';
 import { reward, updateBoxBall } from './deck.js';
 import { fireworks, throwCash } from './fx.js';
 import { playCash, playClink } from './audio.js';
-import { enterLuckySlot, updateDraws } from './lucky.js';
-import { knobPay, pinPay, updateBonus } from './bonus.js';
+import { enterLuckySlot, updateLucky } from './lucky.js';
+import { knobPay, pinPay } from './bonus.js';
 import { counts, queue, stats } from './state.js';
 
-const { Events } = Matter;
+const { Body, Events } = Matter;
+
+// Turns a ball's velocity by a random angle within scatterDeg.
+function scatter(body) {
+  const v = Body.getVelocity(body);
+  const a = ((Math.random() * 2 - 1) * PINS.scatterDeg * Math.PI) / 180;
+  const [c, s] = [Math.cos(a), Math.sin(a)];
+  setVelocity(body, (v.x * c - v.y * s) * 60, (v.x * s + v.y * c) * 60);
+}
 
 // Below the window a ball has left the field: over the hole it drained,
 // anywhere else it fell out of the launch area and goes back to the box.
 function updatePlayBall(body) {
   if (isRiding(body)) return updateRide(body);
+  if (body.plugin.scatter) {
+    body.plugin.scatter = false;
+    scatter(body);
+  }
 
   if (isInLuckySlot(body.position)) {
     remove(body);
-    enterLuckySlot(body.position);
+    enterLuckySlot();
     return false;
   }
   if (body.position.y <= DECK_TOP) return true;
@@ -70,11 +82,14 @@ function pay({ cash = 0, balls = 0 }, at, bills) {
   }
 }
 
-// Knobs always pay; pins only during a bonus.
-function payHits({ pairs }) {
+// Knobs always pay; pins only during a bonus. A ball off a pin is marked to
+// scatter once the step has resolved the bounce.
+function onHits({ pairs }) {
   for (const { bodyA, bodyB } of pairs) {
     const [hit] = [bodyA, bodyB].filter((b) => b.label === KIND.KNOB || b.label === KIND.PIN);
     if (!hit) continue;
+    const ball = hit === bodyA ? bodyB : bodyA;
+    if (hit.label === KIND.PIN && ball.label === KIND.PLAY) ball.plugin.scatter = true;
     const owed = hit.label === KIND.KNOB ? knobPay() : pinPay();
     if (owed) pay(owed, hit.position, hit.label === KIND.KNOB ? undefined : 3);
   }
@@ -82,11 +97,10 @@ function payHits({ pairs }) {
 
 function step() {
   updateBodies();
-  updateDraws();
-  updateBonus(STEP_S);
+  updateLucky();
 }
 
 export function startRules() {
   Events.on(engine, 'afterUpdate', step);
-  Events.on(engine, 'collisionStart', payHits);
+  Events.on(engine, 'collisionStart', onHits);
 }
