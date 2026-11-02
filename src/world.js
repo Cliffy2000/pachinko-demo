@@ -32,7 +32,7 @@ export const SURFACE = {
   rail: { friction: 0.005, frictionStatic: 0, slop: 0.01 },
   tray: { friction: 0, frictionStatic: 0 },
   storage: { friction: 0.001, frictionStatic: 0 },
-  pin: { friction: 0.02, frictionStatic: 0, restitution: 0.5, slop: 0.01 }
+  pin: { friction: 0.02, frictionStatic: 0, restitution: 0.8, slop: 0.01 }
 };
 
 const BALL_SPEC = {

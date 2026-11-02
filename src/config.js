@@ -76,7 +76,8 @@ export const LAUNCH = {
   minSpeed: 1260, // just short of making the top
   maxSpeed: 1586,
   drag: 0.018, // fraction of speed lost per second on the rail
-  autoInterval: 0.6 // s between shots on auto fire; 100 a minute
+  autoInterval: 0.6 / 1.75, // s between shots on auto fire; 175 a minute
+  autoJitter: 0.02 // auto fire power varies by up to this much either way
 };
 
 /* ---- pins -------------------------------------------------------------- */

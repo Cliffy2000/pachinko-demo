@@ -1,4 +1,5 @@
 import { LAUNCH, PHYSICS } from './config.js';
+import { clamp } from './geometry.js';
 import { engine } from './world.js';
 import { buildField } from './field.js';
 import { buildDeck, dispense, dispenseHz, fillTray, payout } from './deck.js';
@@ -18,6 +19,7 @@ startRules();
 const fire = (power) => launch(LAUNCH.minSpeed + (LAUNCH.maxSpeed - LAUNCH.minSpeed) * power);
 
 let autoFire = false;
+const autoPower = () => clamp(readPower() + (Math.random() * 2 - 1) * LAUNCH.autoJitter, 0, 1);
 
 bindLever(canvas, { onPull: showPower, onRelease: fire });
 bindButtons({
@@ -40,7 +42,7 @@ runLoop({
       dispenseDue -= 1;
       dispense();
     }
-    if (autoFire && steps % fireEvery === 0) fire(readPower());
+    if (autoFire && steps % fireEvery === 0) fire(autoPower());
     steps += 1;
     Engine.update(engine, ms);
   },
