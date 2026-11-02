@@ -14,7 +14,7 @@ export const PHYSICS = {
 
 const MARGIN = 20;
 
-export const WINDOW = { x: MARGIN, y: MARGIN, w: 600, h: 545 };
+export const WINDOW = { x: MARGIN, y: MARGIN, w: 680, h: 625 };
 export const DECK_TOP = WINDOW.y + WINDOW.h;
 
 export const CANVAS = {
@@ -40,12 +40,12 @@ export const PALETTE = {
 // The rail is one curve traced by sweep t, anticlockwise from its inner end at
 // bearing `head`. Up to liftFrom it is the field boundary; from there it lifts
 // by one pitch to become the outer wall of the launch channel.
-const RAIL_T = 10;
+const RAIL_T = 12;
 const RAIL_CLEAR = 28;
 
 export const RAIL = {
   thickness: RAIL_T,
-  hitThickness: 15, // grown outward, so the contact face matches the drawing
+  hitThickness: 17, // grown outward, so the contact face matches the drawing
   pitch: RAIL_CLEAR + RAIL_T, // centre-to-centre gap between the windings
   segment: 2, // sweep per slab
 
@@ -62,19 +62,19 @@ export const RAIL = {
 
 export const ELLIPSE = {
   x: WINDOW.x + WINDOW.w / 2,
-  y: WINDOW.y + 281.5,
+  y: WINDOW.y + WINDOW.h / 2 + 9,
   a: WINDOW.w / 2 - RAIL.pitch - RAIL_T / 2, // outer winding flush with the left edge
-  b: 268.5
+  b: WINDOW.h / 2 - 4 // top just inside the window, bottom just past it
 };
 
-export const DRAIN = { bearing: -90, span: 17.4 };
+export const DRAIN = { bearing: -90, width: 78 }; // width along the rail
 
 export const LAUNCH = {
   seat: 460, // sweep position of a fresh ball
   top: 300, // end of the ride; the ball is released
   openAt: 360, // channel opens; the ball may leave the rail from here
-  minSpeed: 1260, // just short of making the top
-  maxSpeed: 1586,
+  minSpeed: 1340, // just short of making the top
+  maxSpeed: 1687,
   drag: 0.018, // fraction of speed lost per second on the rail
   autoInterval: 0.6 / 1.75, // s between shots on auto fire; 175 a minute
   autoJitter: 0.02 // auto fire power varies by up to this much either way
@@ -116,7 +116,7 @@ export const JACKPOT = {
 const BOX_W = 378;
 const BOX_DROP = BOX_W * (30 / 190); // the old tray's slope
 const BOX_DEPTH = 29;
-const BOX_CORNER = { x: MARGIN + 406, y: MARGIN + 827 };
+const BOX_CORNER = { x: WINDOW.x + WINDOW.w / 2 + 106, y: MARGIN + 827 };
 
 export const DECK = {
   plate: 8,

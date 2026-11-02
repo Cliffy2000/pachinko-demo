@@ -1,13 +1,14 @@
 // The playfield: the rail, the drain, the pins and the jackpot cup.
 
 import { BALL, DEBUG, DRAIN, ELLIPSE, JACKPOT, PALETTE, PINS, RAIL } from './config.js';
-import { outward, rad, railPoint } from './geometry.js';
+import { outward, railPoint } from './geometry.js';
 import { FILTER, SURFACE, add, pin, wall } from './world.js';
 
 const drainT = (((DRAIN.bearing - RAIL.head) % 360) + 360) % 360;
-export const DRAIN_GAP = { from: drainT - DRAIN.span / 2, to: drainT + DRAIN.span / 2 };
+const drainSpan = (DRAIN.width / ELLIPSE.a) * (180 / Math.PI);
+export const DRAIN_GAP = { from: drainT - drainSpan / 2, to: drainT + drainSpan / 2 };
 
-const holeReach = (ELLIPSE.a * rad(DRAIN.span)) / 2 + BALL.r;
+const holeReach = DRAIN.width / 2 + BALL.r;
 export const isOverDrain = (x) => Math.abs(x - ELLIPSE.x) < holeReach;
 
 // The rail as overlapping chord slabs. Each runs a ball's reach past its chord,
