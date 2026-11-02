@@ -32,7 +32,13 @@ const CY = OY + BOX / 2;
 //
 // The lift grows both semi-axes rather than the radius, so the two ends of the
 // sweep are themselves plain ellipses and the whole family is one expression.
-const RAIL_T = 10;                           // see the catch-window note by MAX_POWER
+const RAIL_T = 10;                           // drawn thickness
+// The hitbox is thicker than the rail looks, grown outwards so the face the
+// ball actually touches does not move. A ball that leaves the top at full
+// power and falls the height of the field arrives at 26.5px/step, against a
+// catch window of only 26.8 at the drawn thickness: 1.01x, which is why balls
+// were passing through. At 24 the window is 40.8, a 1.54x margin.
+const RAIL_HIT = 24;
 const RAIL_CLEAR = 28;                       // channel width
 const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // semi-axis gain per turn
 const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
@@ -68,6 +74,11 @@ const RAIL_END = 470;                        // 190 deg: a short run-off behind 
 const RAIL_TOP = 300;                        // deg of sweep where the rail ends, 12 o'clock
 const RAIL_DRAG = 0.0003;                    // speed lost per step on the rail
 const RAIL_FREE_AT = 360;                    // deg of sweep, 10 o'clock: the channel opens
+// At the exact point the wall stops being able to hold the ball, the ball's
+// own path has the same curvature as the rail, so it skims the wall for a long
+// way instead of leaving it, chattering along the facets. Holding on a little
+// past that point means it breaks away with real divergence.
+const RAIL_CLING = 0.85;
 
 // Hole in the rail at the bottom, where the curve is tangent to the window.
 const DRAIN_DEG = -90;
@@ -262,8 +273,22 @@ function railWall() {
     if (!inGap && insideBox(mid)) {
       const dx = p.x - prev.x;
       const dy = p.y - prev.y;
-      const span = Math.hypot(dx, dy) + (BALL_R + RAIL_T / 2) * 2;
-      const piece = slab(mid.x, mid.y, span, RAIL_T, Math.atan2(dy, dx), RAIL_GRIP);
+      const span = Math.hypot(dx, dy) + (BALL_R + RAIL_HIT / 2) * 2;
+
+      // Pushed out along the normal by the extra thickness, so the inner face
+      // stays exactly where the drawn rail is.
+      const ox = mid.x - ELL.x;
+      const oy = mid.y - ELL.y;
+      const on = Math.hypot(ox, oy);
+      const grow = (RAIL_HIT - RAIL_T) / 2;
+      const piece = slab(
+        mid.x + (ox / on) * grow,
+        mid.y + (oy / on) * grow,
+        span,
+        RAIL_HIT,
+        Math.atan2(dy, dx),
+        RAIL_GRIP
+      );
       piece.render.visible = false;
       pieces.push(piece);
     }
@@ -478,7 +503,7 @@ function railHolds(t, v) {
   const p = railRidePoint(t);
   const down = (ELL.y - p.y) / Math.hypot(ELL.x - p.x, ELL.y - p.y);
   if (down <= 0) return true;
-  return (v * v) / railRadius(t) >= G_STEP * down;
+  return (v * v) / railRadius(t) >= G_STEP * down * RAIL_CLING;
 }
 
 // One step of the one dimensional ride: gravity along the rail, then advance.
