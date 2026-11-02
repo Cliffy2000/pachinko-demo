@@ -32,7 +32,15 @@ const CY = OY + BOX / 2;
 //
 // The lift grows both semi-axes rather than the radius, so the two ends of the
 // sweep are themselves plain ellipses and the whole family is one expression.
-const RAIL_T = 10;                           // see the catch-window note by MAX_POWER
+const RAIL_T = 10;                           // drawn thickness
+// Hitbox thickness, grown outwards so the face a ball touches does not move.
+// Measured against real Matter by firing a ball at a slab chain at a range of
+// speeds and angles: at 10 or 14 thick a ball passes clean through from 21
+// px/step, and below that it is often ejected along the rail instead of off it
+// (a 15 degree hit came out at 0 degrees). At 20 both stop: nothing passes
+// below 31 px/step and every bounce angle is correct. 24 and 28 measured
+// identical to 20, so 20 is the whole of the fix. Our fastest ball is 26.5.
+const RAIL_HIT = 20;
 const RAIL_CLEAR = 28;                       // channel width
 const RAIL_PITCH = RAIL_CLEAR + RAIL_T;      // semi-axis gain per turn
 const RAIL_HEAD = 150;                       // deg, inner end at 10 o'clock
@@ -186,8 +194,11 @@ const engine = Engine.create();
 engine.gravity.y = 1.8;
 engine.enableSleeping = true;
 
-// Default slop and iteration count let a deep pile compress visibly.
-engine.positionIterations = 12;
+// A 120 ball pile settles with real penetration, not a drawing artefact:
+// measured worst case 3.20px between centres at 12 iterations, 2.33 at 20, and
+// no further gain at 30 or 50. slop does not control it (0.001 measured worse
+// than 0.01). The real driver is load, so it doubled when gravity went to 1.8.
+engine.positionIterations = 20;
 engine.velocityIterations = 8;
 
 const canvas = document.getElementById('field');
@@ -262,8 +273,21 @@ function railWall() {
     if (!inGap && insideBox(mid)) {
       const dx = p.x - prev.x;
       const dy = p.y - prev.y;
-      const span = Math.hypot(dx, dy) + (BALL_R + RAIL_T / 2) * 2;
-      pieces.push(slab(mid.x, mid.y, span, RAIL_T, Math.atan2(dy, dx), RAIL_GRIP));
+      const span = Math.hypot(dx, dy) + (BALL_R + RAIL_HIT / 2) * 2;
+      const ox = mid.x - ELL.x;
+      const oy = mid.y - ELL.y;
+      const on = Math.hypot(ox, oy);
+      const grow = (RAIL_HIT - RAIL_T) / 2;
+      pieces.push(
+        slab(
+          mid.x + (ox / on) * grow,
+          mid.y + (oy / on) * grow,
+          span,
+          RAIL_HIT,
+          Math.atan2(dy, dx),
+          RAIL_GRIP
+        )
+      );
     }
     prev = p;
   }
