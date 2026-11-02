@@ -97,8 +97,8 @@ export const PINS = {
 
 export const JACKPOT = {
   x: WINDOW.x + WINDOW.w / 2,
-  y: WINDOW.y + 440, // rim of the cup
-  mouth: 26, // inner width
+  y: WINDOW.y + 420, // rim of the cup
+  mouth: 26 * 1.6, // inner width
   depth: 22,
   wall: 5,
   reward: 100,
