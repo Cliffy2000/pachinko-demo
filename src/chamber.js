@@ -21,6 +21,7 @@ function dot(ctx, { x, y }, colour, r = SMALL_R) {
 
 function drawTube(ctx) {
   const { from, to } = TUBE;
+  ctx.save();
   ctx.beginPath();
   ctx.moveTo(from.x, from.y);
   ctx.quadraticCurveTo(from.x, to.y, to.x, to.y);
@@ -30,6 +31,7 @@ function drawTube(ctx) {
   ctx.lineWidth = BALL.r * 2 + 4;
   ctx.strokeStyle = '#0d1218';
   ctx.stroke();
+  ctx.restore();
 }
 
 function drawWheel(ctx, wheel, landed) {
