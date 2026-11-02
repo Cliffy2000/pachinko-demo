@@ -52,10 +52,9 @@ const ELL = { x: CX, y: CY - ELL_RISE };
 
 const CHANNEL_L = RAIL_T / 2 + RAIL_CLEAR / 2;     // lift at the middle of the channel
 
-// A flat launch panel butted against the 6 o'clock end of the curve. The curve
-// is horizontal there and the mouth drop has zero slope at that point, so the
-// two meet tangentially and a ball crosses the join without a step to hit.
-const PANEL_LEN = 100;
+// Where a ball is seated, as sweep: 200 degrees round from 12 o'clock. It
+// starts on the rail itself, so there is nothing to transition from.
+const LAUNCH_T = 460;
 
 // A ball in the channel is driven along the rail rather than resolved against
 // it. A launch lane is a one dimensional problem - position on the rail is a
@@ -89,7 +88,7 @@ const DRAIN_BOX = {
 // less than that in a step. The fastest perpendicular impact is about 18, so
 // there is 1.5x in hand. MAX_POWER itself is 25, but that is tangent to the
 // channel at launch, never into a wall.
-const MIN_POWER = 16;                        // px/step, just short of the top
+const MIN_POWER = 15.5;                        // px/step, just short of the top
 const MAX_POWER = 23;                        // px/step
 
 /* ---- deck -------------------------------------------------------------- */
@@ -293,14 +292,6 @@ function bin(box, drop = 0, wallScale = 1, grip = {}, floorT = PLATE, wallAdd = 
   ];
 }
 
-// Overlaps the curve's end by half a thickness so the join cannot leak.
-function launchPanel() {
-  const end = railPoint(RAIL_SWEEP);
-  const panel = slab(end.x + PANEL_LEN / 2, end.y, PANEL_LEN + RAIL_T, RAIL_T, 0, RAIL_GRIP);
-  panel.render.visible = false;
-  return panel;
-}
-
 // Where a ball's centre sits when it is riding the inner face of the outer
 // winding. The channel widens at the mouth, so this is not a fixed offset.
 const railContactLift = (t) => railLift(t) - RAIL_T / 2 - BALL_R;
@@ -317,15 +308,8 @@ function railFrame(t) {
   return { tx: dx / len, ty: dy / len, perDeg: len };
 }
 
-// Dead centre of the panel, resting on it.
-function launchSeat() {
-  const end = railPoint(RAIL_SWEEP);
-  return { x: end.x + PANEL_LEN / 2, y: end.y - RAIL_T / 2 - BALL_R };
-}
-
 Composite.add(engine.world, [
   ...railWall(),
-  launchPanel(),
   ...bin(STORE, 0, STORE_WALLS, BEARINGS, STORE_FLOOR, STORE_WALL_ADD),
   ...bin(TRAY, TRAY_DROP, 1, SLICK)
 ]);
@@ -462,22 +446,6 @@ function spillForward(body) {
 // Gravity as the engine actually applies it, in px per step squared.
 const G_STEP = engine.gravity.y * (engine.gravity.scale ?? 0.001) * (1000 / 60) ** 2;
 
-// A ball that has crossed the end of the panel moving left gets picked up by
-// the rail. Its t is found from where it actually is, so there is no jump.
-function catchRail(body) {
-  const mouth = railRidePoint(RAIL_SWEEP);
-  if (body.position.y < DRAIN_BOX.y2) return false;
-  if (body.position.x > mouth.x || body.velocity.x >= 0) return false;
-
-  let t = RAIL_SWEEP;
-  while (t > RAIL_TOP && railRidePoint(t).x > body.position.x) t -= 0.5;
-
-  body.railT = t;
-  body.railV = Math.hypot(body.velocity.x, body.velocity.y);
-  body.collisionFilter.mask = 0;
-  return true;
-}
-
 function leaveRail(body, frame) {
   body.railT = clamp(body.railT, RAIL_TOP, RAIL_SWEEP);
   const p = railRidePoint(body.railT);
@@ -542,11 +510,13 @@ function launch(power) {
   const next = tray.reduce((a, b) => (b.position.x > a.position.x ? b : a));
   Composite.remove(engine.world, next);
 
-  const seat = launchSeat();
+  const seat = railRidePoint(LAUNCH_T);
   const shot = ball(seat.x, seat.y, 'play');
+  shot.railT = LAUNCH_T;
+  shot.railV = power;
+  shot.collisionFilter.mask = 0;
 
   Composite.add(engine.world, shot);
-  Body.setVelocity(shot, { x: -power, y: 0 });   // straight down the panel, to the left
 }
 
 Events.on(engine, 'afterUpdate', () => {
@@ -580,11 +550,6 @@ Events.on(engine, 'afterUpdate', () => {
         counts.play += 1;
         continue;
       }
-      if (catchRail(body)) {
-        counts.play += 1;
-        continue;
-      }
-
       if (x > DRAIN_BOX.x1 && x < DRAIN_BOX.x2 && y > DRAIN_BOX.y1 && y < DRAIN_BOX.y2) {
         Composite.remove(engine.world, body);
         state.drained += 1;
