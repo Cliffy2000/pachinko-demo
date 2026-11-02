@@ -6,6 +6,8 @@ import { DRAIN_GAP } from './field.js';
 import { KIND, allBodies, ballsOf, engine } from './world.js';
 import { lever } from './input.js';
 import { drawEffects } from './fx.js';
+import { drawChamber } from './chamber.js';
+import { bonus } from './bonus.js';
 
 const { Render, Events, Body } = Matter;
 
@@ -127,8 +129,15 @@ function drawLever(ctx) {
   ctx.restore();
 }
 
+// The roulette sits behind the field, so balls in play are painted again over it.
+function drawBehindField(ctx) {
+  drawChamber(ctx);
+  if (!DEBUG.hitboxes) paintBalls(ctx, ballsOf(KIND.PLAY));
+}
+
 Events.on(render, 'afterRender', () => {
   const ctx = render.context;
+  drawBehindField(ctx);
 
   ctx.save();
   ctx.lineWidth = 2;
@@ -138,5 +147,5 @@ Events.on(render, 'afterRender', () => {
 
   if (!DEBUG.hitboxes) drawArt(ctx);
   drawLever(ctx);
-  drawEffects(ctx, canvas);
+  drawEffects(ctx, canvas, bonus.mode);
 });

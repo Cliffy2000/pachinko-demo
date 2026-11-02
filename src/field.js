@@ -1,8 +1,8 @@
-// The playfield: the rail, the drain, the pins, the jackpot cup and the cash knobs.
+// The playfield: the rail, the drain, the pins, the lucky slot and the cash knobs.
 
-import { BALL, DEBUG, DRAIN, ELLIPSE, JACKPOT, KNOBS, PALETTE, PINS, RAIL, WINDOW } from './config.js';
+import { BALL, DEBUG, DRAIN, ELLIPSE, LUCKY, KNOBS, PALETTE, PINS, RAIL, WINDOW } from './config.js';
 import { outward, rad, railPoint } from './geometry.js';
-import { FILTER, KIND, SURFACE, add, pin, wall } from './world.js';
+import { FILTER, KIND, SURFACE, add, ballsOf, pin, wall } from './world.js';
 
 // The drain is at the bottom, where the rail's radius is the ellipse's b.
 const drainT = (((DRAIN.bearing - RAIL.head) % 360) + 360) % 360;
@@ -80,10 +80,10 @@ function knobs() {
 
 // Sealed sides and floor, open only at the top. A ball whose centre drops
 // below the rim between the walls has gone in.
-const CUP = { half: JACKPOT.mouth / 2, floor: JACKPOT.y + JACKPOT.depth };
+const CUP = { half: LUCKY.mouth / 2, floor: LUCKY.y + LUCKY.depth };
 
-export const isInJackpot = ({ x, y }) =>
-  Math.abs(x - JACKPOT.x) < CUP.half && y > JACKPOT.y + BALL.r && y < CUP.floor;
+export const isInLuckySlot = ({ x, y }) =>
+  Math.abs(x - LUCKY.x) < CUP.half && y > LUCKY.y + BALL.r && y < CUP.floor;
 
 function cup() {
   const piece = (x, y, w, h) => {
@@ -91,17 +91,23 @@ function cup() {
     body.render.fillStyle = PALETTE.cup;
     return body;
   };
-  const off = CUP.half + JACKPOT.wall / 2;
-  const sideY = JACKPOT.y + JACKPOT.depth / 2;
-  const outer = JACKPOT.mouth + JACKPOT.wall * 2;
+  const off = CUP.half + LUCKY.wall / 2;
+  const sideY = LUCKY.y + LUCKY.depth / 2;
+  const outer = LUCKY.mouth + LUCKY.wall * 2;
 
   return [
-    piece(JACKPOT.x - off, sideY, JACKPOT.wall, JACKPOT.depth),
-    piece(JACKPOT.x + off, sideY, JACKPOT.wall, JACKPOT.depth),
-    piece(JACKPOT.x, CUP.floor + JACKPOT.floor / 2, outer, JACKPOT.floor)
+    piece(LUCKY.x - off, sideY, LUCKY.wall, LUCKY.depth),
+    piece(LUCKY.x + off, sideY, LUCKY.wall, LUCKY.depth),
+    piece(LUCKY.x, CUP.floor + LUCKY.floor / 2, outer, LUCKY.floor)
   ];
 }
 
 export function buildField() {
   add(railSlabs(), pinLayout(), cup(), knobs());
+}
+
+// Pin and knob colours for a bonus style, or the normal look for null.
+export function paintField(style) {
+  for (const p of ballsOf(KIND.PIN)) p.render.fillStyle = style ? style.pinColour : PALETTE.pin;
+  for (const k of ballsOf(KIND.KNOB)) k.render.fillStyle = style ? style.knobColour : PALETTE.cash;
 }

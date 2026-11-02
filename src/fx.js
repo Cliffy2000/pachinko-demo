@@ -1,36 +1,48 @@
-// Effects: the jackpot celebration (canvas shake, chasing lights round the
-// window, sparks from the cup, a banner) and bills thrown from cash knobs.
-// Runs on wall-clock time, not physics steps.
+// Visual effects: fireworks and coins, bills from cash knobs, the window lights
+// (flashes and bonus chases), and canvas shake. Runs on wall-clock time, not
+// physics steps.
 
-import { ECONOMY, JACKPOT, KNOBS, PALETTE, WINDOW } from './config.js';
+import { FX, KNOBS, PALETTE, WINDOW } from './config.js';
 
 const LIGHT_GAP = 30;
 const SPARK_GRAVITY = 900; // px/s²
 const BILL = { w: 9, h: 5, gravity: 260, drag: 2.5 }; // light paper: slow fall, high drag
 
-let startedAt = -Infinity;
+const BURSTS = {
+  tiny: { sparks: 6, coins: 0, speed: [80, 180], life: [0.25, 0.45], size: [2, 3] },
+  small: { sparks: 26, coins: 6, speed: [180, 420], life: [0.5, 1], size: [3, 5] },
+  large: { sparks: 70, coins: 34, speed: [300, 800], life: [0.9, 1.8], size: [4, 7] }
+};
+
 let lastDraw = null;
 let sparks = [];
 let bills = [];
+let flash = null;
+let shakes = [];
 
+const clock = () => performance.now() / 1000;
 const between = (lo, hi) => lo + Math.random() * (hi - lo);
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
-// Flares and gold coins burst over the upper half; coins are slower and live longer.
-export function celebrate({ x, y }) {
-  startedAt = performance.now();
-  const burst = (n, speed, life, extra) => {
-    for (let i = 0; i < n; i++) {
-      const a = -Math.PI * Math.random();
-      const v = between(...speed);
-      sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: between(...life), ...extra() });
-    }
-  };
-  burst(JACKPOT.sparks, [300, 800], [0.9, 1.8], () => ({ size: between(4, 7) }));
-  burst(JACKPOT.coins, [250, 600], [1.4, 2.2], () => ({ coin: between(4, 6), phase: Math.random() * Math.PI * 2 }));
+/* ---- triggers ---------------------------------------------------------- */
+
+// A burst over the upper half, `delay` seconds from now. Gold bursts carry coins.
+export function fireworks({ x, y }, size, colours = [PALETTE.gold], delay = 0) {
+  const spec = BURSTS[size];
+  const coins = colours.includes(PALETTE.gold) ? spec.coins : 0;
+
+  for (let i = 0; i < spec.sparks + coins; i++) {
+    const a = -Math.PI * Math.random();
+    const v = between(...spec.speed);
+    const spark = { x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, wait: delay, life: between(...spec.life) };
+    if (i < spec.sparks) Object.assign(spark, { colour: pick(colours), size: between(...spec.size) });
+    else Object.assign(spark, { coin: between(4, 6), phase: Math.random() * Math.PI * 2, life: spark.life * 1.4 });
+    sparks.push(spark);
+  }
 }
 
-export function throwCash({ x, y }) {
-  for (let i = 0; i < KNOBS.bills; i++) {
+export function throwCash({ x, y }, count = KNOBS.bills) {
+  for (let i = 0; i < count; i++) {
     const a = between(-Math.PI * 0.85, -Math.PI * 0.15);
     const speed = between(120, 260);
     bills.push({
@@ -46,50 +58,82 @@ export function throwCash({ x, y }) {
   }
 }
 
-function shake(canvas, t) {
-  if (t > JACKPOT.shakeS) {
-    canvas.style.transform = '';
-    return;
-  }
-  const amp = JACKPOT.shakePx * (1 - t / JACKPOT.shakeS);
-  const dx = (Math.random() * 2 - 1) * amp;
-  const dy = (Math.random() * 2 - 1) * amp;
-  canvas.style.transform = `translate(${dx}px, ${dy}px)`;
+// Every window light at once, fading out over `seconds`.
+export function flashLights(colour, level, seconds) {
+  flash = { colour, level, from: clock(), seconds };
 }
 
-// Bulbs evenly spaced round the window, every other one lit, swapping 8 times a second.
-function drawLights(ctx, t) {
-  const { x, y, w, h } = WINDOW;
-  const perimeter = 2 * (w + h);
-  const phase = Math.floor(t * 8) % 2;
+export function shake(px, seconds) {
+  shakes.push({ px, from: clock(), seconds });
+}
 
-  ctx.fillStyle = PALETTE.jackpot;
-  ctx.shadowColor = PALETTE.jackpot;
-  ctx.shadowBlur = 12;
-  for (let i = 0, s = 0; s < perimeter; i++, s += LIGHT_GAP) {
-    if (i % 2 !== phase) continue;
-    const p =
+/* ---- window lights ----------------------------------------------------- */
+
+const BULBS = (() => {
+  const { x, y, w, h } = WINDOW;
+  const bulbs = [];
+  for (let s = 0; s < 2 * (w + h); s += LIGHT_GAP) {
+    bulbs.push(
       s < w ? { x: x + s, y } :
       s < w + h ? { x: x + w, y: y + s - w } :
       s < 2 * w + h ? { x: x + w - (s - w - h), y: y + h } :
-      { x, y: y + h - (s - 2 * w - h) };
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-    ctx.fill();
+      { x, y: y + h - (s - 2 * w - h) }
+    );
   }
+  return bulbs;
+})();
+
+// colourOf(i) gives bulb i's colour, or null for unlit. Higher levels are
+// bigger, brighter and glow wider.
+function drawBulbs(ctx, colourOf, level, alpha = 1) {
+  ctx.globalAlpha = (0.35 + 0.65 * level) * alpha;
+  ctx.shadowBlur = 4 + 14 * level;
+  const r = 2.5 + 2 * level;
+
+  BULBS.forEach((b, i) => {
+    const colour = colourOf(i);
+    if (!colour) return;
+    ctx.fillStyle = colour;
+    ctx.shadowColor = colour;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  });
   ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
 }
 
+// Small bonus: every third bulb, cyan and magenta, running round the window.
+// Big bonus: every other bulb in gold, swapping 8 times a second.
+const CHASES = {
+  small: (t) => {
+    const step = Math.floor(t * 10);
+    return (i) => ((i + step) % 3 ? null : Math.floor((i + step) / 3) % 2 ? PALETTE.bonusA : PALETTE.bonusB);
+  },
+  big: (t) => {
+    const phase = Math.floor(t * 8) % 2;
+    return (i) => (i % 2 === phase ? PALETTE.gold : null);
+  }
+};
+
+/* ---- particles --------------------------------------------------------- */
+
 function drawSparks(ctx, dt) {
-  ctx.fillStyle = PALETTE.jackpot;
-  sparks = sparks.filter((s) => (s.life -= dt) > 0);
+  sparks = sparks.filter((s) => s.wait > 0 || (s.life -= dt) > 0);
   for (const s of sparks) {
+    if (s.wait > 0) {
+      s.wait -= dt;
+      continue;
+    }
     s.vy += SPARK_GRAVITY * dt;
     s.x += s.vx * dt;
     s.y += s.vy * dt;
     ctx.globalAlpha = Math.min(1, s.life * 2);
     if (s.coin) drawCoin(ctx, s, dt);
-    else ctx.fillRect(s.x - s.size / 2, s.y - s.size / 2, s.size, s.size);
+    else {
+      ctx.fillStyle = s.colour;
+      ctx.fillRect(s.x - s.size / 2, s.y - s.size / 2, s.size, s.size);
+    }
   }
   ctx.globalAlpha = 1;
 }
@@ -108,7 +152,6 @@ function drawCoin(ctx, s, dt) {
   ctx.strokeStyle = PALETTE.coinEdge;
   ctx.stroke();
   ctx.restore();
-  ctx.fillStyle = PALETTE.jackpot;
 }
 
 // Each bill tumbles and sways side to side as it falls.
@@ -136,39 +179,29 @@ function drawBills(ctx, dt) {
   }
 }
 
-function drawBanner(ctx, t) {
-  const pop = Math.min(1, t / 0.15); // grows in over 0.15 s
-  const fade = Math.min(1, (JACKPOT.showS - t) / 0.4); // fades over the last 0.4 s
-  const cx = WINDOW.x + WINDOW.w / 2;
-  const cy = WINDOW.y + WINDOW.h * 0.3;
+/* ---- per frame --------------------------------------------------------- */
 
-  ctx.globalAlpha = fade;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = PALETTE.jackpot;
-  ctx.shadowColor = PALETTE.cup;
-  ctx.shadowBlur = 16;
-  ctx.font = `bold ${Math.round(64 * pop * (1 + 0.05 * Math.sin(t * 12)))}px system-ui, sans-serif`;
-  ctx.fillText('JACKPOT', cx, cy);
-  ctx.font = `bold ${Math.round(30 * pop)}px system-ui, sans-serif`;
-  ctx.fillText(`+${JACKPOT.reward * ECONOMY.ballCost}`, cx, cy + 52); // the reward's worth in cash
-  ctx.shadowBlur = 0;
-  ctx.globalAlpha = 1;
+function applyShake(canvas, t) {
+  shakes = shakes.filter((s) => t - s.from < s.seconds);
+  const amp = Math.max(0, ...shakes.map((s) => s.px * (1 - (t - s.from) / s.seconds)));
+  canvas.style.transform = amp
+    ? `translate(${between(-amp, amp)}px, ${between(-amp, amp)}px)`
+    : '';
 }
 
-export function drawEffects(ctx, canvas) {
-  const now = performance.now();
-  const dt = lastDraw === null ? 0 : Math.min((now - lastDraw) / 1000, 0.1);
-  lastDraw = now;
-  const t = (now - startedAt) / 1000;
+// `chase` is the running bonus mode, or null.
+export function drawEffects(ctx, canvas, chase) {
+  const t = clock();
+  const dt = lastDraw === null ? 0 : Math.min(t - lastDraw, 0.1);
+  lastDraw = t;
 
   ctx.save();
-  shake(canvas, t);
+  applyShake(canvas, t);
+  if (chase) drawBulbs(ctx, CHASES[chase](t), FX.lights[chase]);
+  if (flash && t - flash.from < flash.seconds) {
+    drawBulbs(ctx, () => flash.colour, flash.level, 1 - (t - flash.from) / flash.seconds);
+  }
   if (sparks.length) drawSparks(ctx, dt);
   if (bills.length) drawBills(ctx, dt);
-  if (t < JACKPOT.showS) {
-    drawLights(ctx, t);
-    drawBanner(ctx, t);
-  }
   ctx.restore();
 }

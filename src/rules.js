@@ -1,13 +1,15 @@
 // Per-step behaviour for every dynamic body, dispatched by kind. A new kind of
 // body gets its own entry in UPDATE.
 
-import { CANVAS, DECK_TOP, JACKPOT, KNOBS } from './config.js';
-import { KIND, allBodies, engine, remove } from './world.js';
-import { isInJackpot, isOverDrain } from './field.js';
+import { CANVAS, DECK_TOP } from './config.js';
+import { KIND, STEP_S, allBodies, engine, remove } from './world.js';
+import { isInLuckySlot, isOverDrain } from './field.js';
 import { isRiding, updateRide } from './launch.js';
 import { reward, updateBoxBall } from './deck.js';
-import { celebrate, throwCash } from './fx.js';
-import { playCash, playJackpot } from './audio.js';
+import { fireworks, throwCash } from './fx.js';
+import { playCash, playClink } from './audio.js';
+import { enterLuckySlot, updateDraws } from './lucky.js';
+import { knobPay, pinPay, updateBonus } from './bonus.js';
 import { counts, queue, stats } from './state.js';
 
 const { Events } = Matter;
@@ -17,12 +19,9 @@ const { Events } = Matter;
 function updatePlayBall(body) {
   if (isRiding(body)) return updateRide(body);
 
-  if (isInJackpot(body.position)) {
+  if (isInLuckySlot(body.position)) {
     remove(body);
-    stats.jackpots += 1;
-    reward(JACKPOT.reward);
-    celebrate(body.position);
-    playJackpot();
+    enterLuckySlot(body.position);
     return false;
   }
   if (body.position.y <= DECK_TOP) return true;
@@ -58,17 +57,36 @@ function updateBodies() {
   }
 }
 
-function payKnobHits({ pairs }) {
-  for (const { bodyA, bodyB } of pairs) {
-    const knob = bodyA.label === KIND.KNOB ? bodyA : bodyB.label === KIND.KNOB ? bodyB : null;
-    if (!knob) continue;
-    stats.cash += KNOBS.cash;
-    throwCash(knob.position);
+function pay({ cash = 0, balls = 0 }, at, bills) {
+  if (cash) {
+    stats.cash += cash;
+    throwCash(at, bills);
     playCash();
+  }
+  if (balls) {
+    reward(balls);
+    fireworks(at, 'tiny');
+    playClink();
   }
 }
 
+// Knobs always pay; pins only during a bonus.
+function payHits({ pairs }) {
+  for (const { bodyA, bodyB } of pairs) {
+    const [hit] = [bodyA, bodyB].filter((b) => b.label === KIND.KNOB || b.label === KIND.PIN);
+    if (!hit) continue;
+    const owed = hit.label === KIND.KNOB ? knobPay() : pinPay();
+    if (owed) pay(owed, hit.position, hit.label === KIND.KNOB ? undefined : 3);
+  }
+}
+
+function step() {
+  updateBodies();
+  updateDraws();
+  updateBonus(STEP_S);
+}
+
 export function startRules() {
-  Events.on(engine, 'afterUpdate', updateBodies);
-  Events.on(engine, 'collisionStart', payKnobHits);
+  Events.on(engine, 'afterUpdate', step);
+  Events.on(engine, 'collisionStart', payHits);
 }

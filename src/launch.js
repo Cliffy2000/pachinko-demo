@@ -25,11 +25,11 @@ function takeFromBox() {
   return true;
 }
 
-// Draws from the chosen source, or the other one when it is empty. Returns
-// whether a ball was fired.
-export function launch(speed, fromOverflow) {
+// Draws from the chosen source, or the other one when it is empty; a free
+// launch takes nothing. Returns whether a ball was fired.
+export function launch(speed, { fromOverflow = false, free = false } = {}) {
   const [first, second] = fromOverflow ? [takeFromOverflow, takeFromBox] : [takeFromBox, takeFromOverflow];
-  if (!first() && !second()) return false;
+  if (!free && !first() && !second()) return false;
 
   const seat = ridePoint(LAUNCH.seat);
   const shot = ball(KIND.PLAY, seat.x, seat.y);

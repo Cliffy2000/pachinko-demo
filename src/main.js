@@ -1,4 +1,4 @@
-import { LAUNCH, PHYSICS } from './config.js';
+import { BONUS, LAUNCH, PHYSICS } from './config.js';
 import { clamp } from './geometry.js';
 import { engine } from './world.js';
 import { buildField } from './field.js';
@@ -9,6 +9,7 @@ import { canvas, drawFrame, rememberPoses } from './view.js';
 import { bindLever } from './input.js';
 import { bindButtons, readPower, showAuto, showPower, showSource, updatePanel } from './panel.js';
 import { runLoop } from './loop.js';
+import { isBig, isFree } from './bonus.js';
 import { playLaunch, startAudio } from './audio.js';
 
 const { Engine } = Matter;
@@ -22,15 +23,17 @@ let autoFire = false;
 let fromOverflow = false;
 
 function fire(power) {
-  if (launch(LAUNCH.minSpeed + (LAUNCH.maxSpeed - LAUNCH.minSpeed) * power, fromOverflow)) playLaunch();
+  const speed = LAUNCH.minSpeed + (LAUNCH.maxSpeed - LAUNCH.minSpeed) * power;
+  if (launch(speed, { fromOverflow, free: isFree() })) playLaunch();
 }
-const autoPower = () => clamp(readPower() + (Math.random() * 2 - 1) * LAUNCH.autoJitter, 0, 1);
+const jittered = (spread) => clamp(readPower() + (Math.random() * 2 - 1) * spread, 0, 1);
 
 bindLever(canvas, { onPull: showPower, onRelease: fire });
 bindButtons({
   onBuy: buy,
   onAuto: () => showAuto((autoFire = !autoFire)),
-  onSource: () => showSource((fromOverflow = !fromOverflow))
+  onSource: () => showSource((fromOverflow = !fromOverflow)),
+  onBonusFire: () => fire(jittered(BONUS.fireJitter))
 });
 
 const fireEvery = Math.round(PHYSICS.hz * LAUNCH.autoInterval);
@@ -47,7 +50,7 @@ runLoop({
       dispenseDue -= 1;
       dispense();
     }
-    if (autoFire && steps % fireEvery === 0) fire(autoPower());
+    if (autoFire && !isBig() && steps % fireEvery === 0) fire(jittered(LAUNCH.autoJitter));
     steps += 1;
     Engine.update(engine, ms);
   },

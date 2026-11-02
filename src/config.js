@@ -32,11 +32,14 @@ export const PALETTE = {
   pivot: '#8296ad',
   pin: '#8296ad',
   cup: '#e0574a',
-  jackpot: '#ffd166',
+  gold: '#ffd166',
   coin: '#f5c542',
   coinEdge: '#b8860b',
   cash: '#3fae5a',
-  cashDark: '#25703a'
+  cashDark: '#25703a',
+  bonusA: '#22d3ee', // small bonus: cyan and magenta
+  bonusB: '#e040fb',
+  white: '#ffffff'
 };
 
 /* ---- rail -------------------------------------------------------------- */
@@ -107,22 +110,52 @@ export const PINS = {
   }
 };
 
-/* ---- jackpot ----------------------------------------------------------- */
+/* ---- lucky slot -------------------------------------------------------- */
 
-export const JACKPOT = {
+export const LUCKY = {
   x: WINDOW.x + WINDOW.w / 2,
   y: WINDOW.y + 457, // rim of the cup
   mouth: 26 * 1.6, // inner width
   depth: 22, // inside, rim to floor
   wall: 5,
-  floor: 9,
-  reward: 250, // balls
+  floor: 9
+};
 
-  shakeS: 0.6,
-  shakePx: 11,
-  showS: 2.4, // banner and lights
-  sparks: 60,
-  coins: 30
+// Each ball into the lucky slot queues a draw. The outcome is picked by weight
+// when the draw starts; the roulette under the slot only shows it.
+export const DRAW = {
+  x: LUCKY.x,
+  y: LUCKY.y + 95, // roulette centre
+  r: 34, // pocket ring
+  track: 44, // where the ball rolls before it drops in
+  pockets: 20, // shared out by weight, at least one each
+  spinS: 2.6,
+  holdS: 0.5, // result shown before the next draw starts
+  laps: 3,
+  outcomes: [
+    { name: 'small', weight: 60, balls: 88, colour: '#5b6b80' },
+    { name: 'large', weight: 25, balls: 288, colour: '#f5c542' },
+    { name: 'smallBonus', weight: 10, bonus: 'small', colour: '#22d3ee' },
+    { name: 'bigBonus', weight: 5, bonus: 'big', colour: '#ff4d4d' }
+  ]
+};
+
+// During a bonus, launches are free and pins and knobs pay. A drawn bonus of
+// the same or higher rank restarts the clock; big replaces small.
+export const BONUS = {
+  seconds: 10,
+  small: { rank: 1, pinColour: '#3fdc6a', knobColour: '#f5c542', pin: { cash: 25 }, knob: { balls: 50 } },
+  big: { rank: 2, pinColour: '#f5c542', knobColour: '#f5c542', pin: { balls: 10 }, knob: { balls: 100 }, slotBalls: 250 },
+  fireJitter: 0.06, // power spread of the bonus fire button
+  shakeEveryS: [0.8, 2.2] // random gap between extra shakes in big bonus
+};
+
+// Light levels step up: slot hit, large reward, small bonus, big bonus.
+export const FX = {
+  lights: { hit: 0.3, large: 0.55, small: 0.75, big: 1 },
+  flashS: { hit: 0.25, large: 0.6 },
+  shake: { px: 11, s: 0.6 },
+  bonusShake: { px: 6, s: 0.3 }
 };
 
 /* ---- cash knobs -------------------------------------------------------- */
@@ -154,7 +187,7 @@ export const DECK = {
   spillDelay: 0.14, // a ball resting above the rim falls out the front after this
 
   dispenseHz: 60,
-  rewardSpeedup: 1.25 // dispenser runs this much faster while a jackpot pays out
+  rewardSpeedup: 1.25 // dispenser runs this much faster while a reward pays out
 };
 
 /* ---- economy ----------------------------------------------------------- */
@@ -173,8 +206,8 @@ export const AUDIO = {
   tapGapS: 0.01,
   minImpact: 40, // px/s; slower contacts make no sound
   fullImpact: 900, // px/s; impacts this hard play at full volume
-  jackpotCoins: 60,
-  jackpotClatterS: 2.2
+  coins: { small: 18, large: 60, big: 80 }, // clinks per clatter
+  clatterS: { small: 1, large: 2.2, big: 2.6 }
 };
 
 /* ---- lever ------------------------------------------------------------- */

@@ -5,6 +5,7 @@
   --text: #e8eef5;
   --muted: #8296ad;
   --accent: #e0574a;
+  --gold: #ffd166;
 }
 
 * { box-sizing: border-box; }
@@ -93,6 +94,22 @@ canvas {
   background: var(--edge);
   color: var(--muted);
   cursor: default;
+}
+
+#bonus-fire {
+  margin-top: auto;
+  font-size: 20px;
+  letter-spacing: 0.1em;
+  background: var(--gold);
+  color: #2a1f00;
+  animation: bonus-flash 0.4s steps(2) infinite;
+}
+
+#bonus-fire[hidden] { display: none; }
+#bonus-fire:not([hidden]) + .brand { margin-top: 0; }
+
+@keyframes bonus-flash {
+  50% { background: #fff3c4; box-shadow: 0 0 18px var(--gold); }
 }
 
 .buy { display: flex; gap: 10px; }

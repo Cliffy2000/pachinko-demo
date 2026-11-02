@@ -120,15 +120,36 @@ function coinClink(at) {
   noise({ gain: gain * 0.8, decay: 0.012, filter: 'highpass', freq: 6000, at, counted: false });
 }
 
-// A rising run, then a clatter of coins that is densest early and thins out.
-export function playJackpot() {
-  if (!allowed('jackpot')) return;
-  [523, 659, 784, 1047, 1319, 1568].forEach((freq, i) =>
-    tone({ freq, type: 'triangle', gain: 0.16, decay: 0.4, at: i * 0.07, counted: false })
-  );
-  for (let i = 0; i < AUDIO.jackpotCoins; i++) {
-    coinClink(0.25 + Math.random() ** 1.6 * AUDIO.jackpotClatterS);
+// A clatter of coins, densest early and thinning out. size: small, large or big.
+export function playCoins(size, from = 0) {
+  if (!allowed('coins-' + size, 0.05)) return;
+  for (let i = 0; i < AUDIO.coins[size]; i++) {
+    coinClink(from + Math.random() ** 1.6 * AUDIO.clatterS[size]);
   }
+}
+
+export function playClink() {
+  if (!allowed('clink', 0.03)) return;
+  coinClink(0);
+}
+
+// Two quick rising notes as a ball drops into the lucky slot.
+export function playSlotHit() {
+  if (!allowed('slot', 0.05)) return;
+  tone({ freq: 1319, type: 'triangle', gain: 0.12, decay: 0.12 });
+  tone({ freq: 1976, type: 'triangle', gain: 0.12, decay: 0.25, at: 0.08 });
+}
+
+// Small bonus: a quick up-and-down run. Big bonus: a rising fanfare into coins.
+export function playBonus(mode) {
+  if (!allowed('bonus')) return;
+  const notes = mode === 'big'
+    ? [523, 659, 784, 1047, 1319, 1568]
+    : [784, 988, 1175, 1568, 1175, 1568];
+  notes.forEach((freq, i) =>
+    tone({ freq, type: mode === 'big' ? 'triangle' : 'square', gain: mode === 'big' ? 0.16 : 0.07, decay: 0.35, at: i * 0.07, counted: false })
+  );
+  if (mode === 'big') playCoins('big', 0.25);
 }
 
 export function playLaunch() {
