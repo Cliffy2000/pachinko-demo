@@ -101,7 +101,7 @@ export const JACKPOT = {
   mouth: 26 * 1.6, // inner width
   depth: 22,
   wall: 5,
-  reward: 1000,
+  reward: 100,
 
   shakeS: 0.6,
   shakePx: 8,
@@ -133,9 +133,10 @@ export const DECK = {
 
 /* ---- lever ------------------------------------------------------------- */
 
+// Pivot beside the box's right wall, level with its rim.
 export const LEVER = {
-  x: MARGIN + 444,
-  y: MARGIN + 716,
+  x: DECK.box.x + DECK.box.w + DECK.plate + 30,
+  y: DECK.box.y,
   length: 108,
   travel: 40, // degrees at full pull
   pullPx: 160, // drag distance for a full pull
