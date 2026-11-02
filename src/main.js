@@ -55,8 +55,8 @@ const CHANNEL_L = RAIL_T / 2 + RAIL_CLEAR / 2;     // lift at the middle of the 
 
 // Where a ball is seated, as sweep: 200 degrees round from 12 o'clock. It
 // starts on the rail itself, so there is nothing to transition from.
-const LAUNCH_T = 435;
-const RAIL_TAIL = 40;                        // px of rail left behind the seat
+const LAUNCH_T = 460;                        // 200 deg clockwise from 12
+const RAIL_END = 470;                        // 190 deg: a short run-off behind the seat
 
 // A ball in the channel is driven along the rail rather than resolved against
 // it. A launch lane is a one dimensional problem - position on the rail is a
@@ -74,23 +74,19 @@ const DRAIN_DEG = -90;
 const DRAIN_SPAN = 17.4;                     // deg, about 73px of rail
 const DRAIN_T = ((DRAIN_DEG - RAIL_HEAD) % 360 + 360) % 360;
 
-// A box rather than a line, hung under the window across the hole. 30 tall is
-// more than the fastest ball covers in a step, so nothing gets through it, and
-// being bounded means the launch area below the channel stays clear of it.
-const DRAIN_H = 30;
-const DRAIN_BOX = {
-  x1: ELL.x - (ELL_A * DRAIN_SPAN * Math.PI / 180) / 2 - BALL_R,
-  x2: ELL.x + (ELL_A * DRAIN_SPAN * Math.PI / 180) / 2 + BALL_R,
-  y1: DECK_TOP,
-  y2: DECK_TOP + DRAIN_H
-};
+// The hole is the only way out of the field, and the window border is the line
+// that proves it. Anything in play that gets below the border has left: inside
+// the hole's width it drained, anywhere else it fell out of the launch area and
+// goes back to the tray. No box to slip past, so nothing can be missed.
+const DRAIN_X1 = ELL.x - (ELL_A * DRAIN_SPAN * Math.PI / 180) / 2 - BALL_R;
+const DRAIN_X2 = ELL.x + (ELL_A * DRAIN_SPAN * Math.PI / 180) / 2 + BALL_R;
 
 // What stops a ball tunnelling is not the wall thickness but the catch window,
 // 2 * (RAIL_T / 2 + BALL_R) = 26.8px: a ball is caught as long as it travels
 // less than that in a step. The fastest perpendicular impact is about 18, so
 // there is 1.5x in hand. MAX_POWER itself is 25, but that is tangent to the
 // channel at launch, never into a wall.
-const MIN_POWER = 18.8;                        // px/step, just short of the top
+const MIN_POWER = 20.8;                        // px/step, just short of the top
 const MAX_POWER = 30;                        // px/step
 
 /* ---- deck -------------------------------------------------------------- */
@@ -314,17 +310,6 @@ function railFrame(t) {
   const len = Math.hypot(dx, dy);
   return { tx: dx / len, ty: dy / len, perDeg: len };
 }
-
-// Where the rail physically stops: a short run-off behind the seat, no more.
-const RAIL_END = (() => {
-  let t = LAUNCH_T;
-  let run = 0;
-  while (run < RAIL_TAIL && t < MOUTH_TO) {
-    run += railFrame(t).perDeg;
-    t += 1;
-  }
-  return t;
-})();
 
 Composite.add(engine.world, [
   ...railWall(),
@@ -566,9 +551,10 @@ Events.on(engine, 'afterUpdate', () => {
         counts.play += 1;
         continue;
       }
-      if (x > DRAIN_BOX.x1 && x < DRAIN_BOX.x2 && y > DRAIN_BOX.y1 && y < DRAIN_BOX.y2) {
+      if (y > DECK_TOP) {
         Composite.remove(engine.world, body);
-        state.drained += 1;
+        if (x > DRAIN_X1 && x < DRAIN_X2) state.drained += 1;
+        else feed.tray += 1;
         continue;
       }
     }
