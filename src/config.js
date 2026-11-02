@@ -22,7 +22,7 @@ export const CANVAS = {
   height: 835 + MARGIN * 2 // window top to tray floor, plus margins
 };
 
-export const BALL = { r: 8.4, density: 0.004 };
+export const BALL = { r: 6.4, density: 0.004 };
 
 export const PALETTE = {
   wall: '#2d3a4b',
@@ -101,7 +101,7 @@ export const JACKPOT = {
   mouth: 26 * 1.6, // inner width
   depth: 22,
   wall: 5,
-  reward: 100,
+  reward: 1000,
 
   shakeS: 0.6,
   shakePx: 8,
