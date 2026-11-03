@@ -141,8 +141,8 @@ export const DRAW = {
   enterS: 0.4, // a ball's drop from the slot into the queue
   // Small wins are labelled by the wheel; the rest get a banner.
   outcomes: [
-    { name: 'small', weight: 15, balls: 88, colour: '#7d8fa6', label: '+88' },
-    { name: 'large', weight: 7, balls: 288, colour: '#f5c542', banner: ['GOLD RUSH', '+288 balls'] },
+    { name: 'small', weight: 15, balls: 8, colour: '#7d8fa6', label: '+8' },
+    { name: 'large', weight: 7, balls: 88, colour: '#f5c542', banner: ['GOLD RUSH', '+88 balls'] },
     { name: 'smallBonus', weight: 2, bonus: 'small', colour: '#22d3ee', banner: ['LUCKY TIME', 'free balls for 10 s'] },
     { name: 'bigBonus', weight: 1, bonus: 'big', colour: '#ff4d4d', banner: ['FEVER', 'everything turns gold'] }
   ],
@@ -153,7 +153,7 @@ export const DRAW = {
 // the same or higher rank restarts the clock; big replaces small.
 export const BONUS = {
   seconds: 10,
-  small: { rank: 1, pinColour: '#3fdc6a', knobColour: '#f5c542', pin: { cash: 25 }, knob: { balls: 50 } },
+  small: { rank: 1, pinColour: '#3fdc6a', knobColour: '#f5c542', pin: { cash: 25 }, knob: { balls: 25 } },
   big: { rank: 2, pinColour: '#f5c542', knobColour: '#f5c542', pin: { balls: 10 }, knob: { balls: 100 }, slotBalls: 250 },
   fireJitter: 0.06, // power spread of the bonus fire button
   shakeEveryS: [0.8, 2.2] // random gap between extra shakes in big bonus
